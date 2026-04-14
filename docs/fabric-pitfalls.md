@@ -39,18 +39,20 @@
 
 ### 対策
 - commit 時 明示:
-  `--signature-policy "OR('OrgAMSP.peer','OrgBMSP.peer','OrgCMSP.peer')"`
+  `--signature-policy "OR('Org1MSP.peer','Org2MSP.peer','Org3MSP.peer')"`
 - もしくは invoke 時 複数 `--peerAddresses` 指定
 
 ## MSP / Identity
 
 ### actor 取得
-- `ctx.clientIdentity.getMSPID()` → 呼出元 MSP ID（例: `OrgAMSP`）
+- `ctx.clientIdentity.getMSPID()` → 呼出元 MSP ID（例: `Org1MSP`）
 - `ctx.clientIdentity.getID()` → X.509 subject DN
 - spec 10.2 の `actor` は MSPID + user id の組合せ推奨
+- MSP ID と業務語彙の対応（Issue #1 決定事項）:
+  - `Org1MSP` = メーカー A / `Org2MSP` = 卸 B / `Org3MSP` = 販売店 C
 
 ### 初期所有者 検証
-- `CreateProduct` 時 `clientIdentity.MSPID === 'OrgAMSP'` を必須
+- `CreateProduct` 時 `clientIdentity.MSPID === 'Org1MSP'` を必須（メーカー A のみ登録可能）
 - `initialOwner === manufacturer` 検証も並行
 
 ## test-network 3Org 化
@@ -59,11 +61,13 @@
 - test-network は 2Org 固定
 - `addOrg3` サンプルは「後から追加」用 → チャンネル作成後 join
 - 最初から 3Org で start するには `configtx.yaml` / crypto-config 編集必要
-- MSP ID をデフォルト（Org1MSP）から `OrgAMSP` 等へ リネームする際 多数ファイル同期変更必要
+- MSP ID は fabric-samples 標準の `Org1MSP` / `Org2MSP` / `Org3MSP` をそのまま採用（Issue #1）
 
 ### 対策
-- 差分を `fabric/test-network-wrapper/patches/` に版管理
-- 毎回 patch 適用 → start の流れをスクリプト化
+- test-network 標準フロー使用:
+  - `./network.sh up createChannel -c supplychannel -ca`
+  - `./addOrg3/addOrg3.sh up -c supplychannel -ca`
+- 業務語彙は T5-3 出力整形層で変換
 
 ## Docker / ネットワーク
 

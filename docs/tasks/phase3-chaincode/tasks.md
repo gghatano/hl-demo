@@ -13,7 +13,7 @@
 ## T3-2 `CreateProduct`
 - 重複チェック（`GetState` 空判定）
 - `initialOwner === manufacturer` 検証
-- `clientIdentity.MSPID === OrgAMSP` 検証
+- `clientIdentity.MSPID === 'Org1MSP'` 検証（メーカー A のみ登録可能）
 - `createdAt` / `updatedAt` は T3-0 経由
 
 ## T3-3 `TransferProduct`

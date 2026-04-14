@@ -1,10 +1,14 @@
 # Phase 2: ネットワーク構築
 
-## T2-1 3Org化（`addOrg3` サンプル差分起点）
-- T2-1a MSP ID 統一: `OrgAMSP` / `OrgBMSP` / `OrgCMSP`
-- T2-1b CA / Peer / Orderer ポート割当（衝突回避）
-- T2-1c 差分パッチ版管理: `configtx.yaml` / `crypto-config*.yaml` / `docker-compose-org3.yaml`
-  - 配置: `fabric/test-network-wrapper/patches/`
+## 方針（Issue #1 決定事項）
+- fabric-samples 標準 MSP ID（`Org1MSP` / `Org2MSP` / `Org3MSP`）をそのまま採用
+- 業務語彙変換は T5-3 出力整形層で行う
+- 対応: `Org1MSP` = メーカー A / `Org2MSP` = 卸 B / `Org3MSP` = 販売店 C
+
+## T2-1 3Org 化（test-network 標準フロー使用）
+- `network.sh up createChannel -c supplychannel -ca` で 2Org 起動
+- `addOrg3/addOrg3.sh up -c supplychannel -ca` で Org3 合流
+- patches は使わない（fabric-samples 追従コスト回避）
 
 ## T2-2 Channel
 - `supplychannel` 作成

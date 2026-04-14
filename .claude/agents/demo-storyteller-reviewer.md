@@ -29,7 +29,7 @@ model: sonnet
 
 ## C. CLI 出力の可読性
 - [ ] 生 JSON を直接見せない
-- [ ] 組織コードを業務語彙へ変換（`OrgAMSP` → `メーカー A`）
+- [ ] 組織コードを業務語彙へ変換（`Org1MSP` → `メーカー A` / `Org2MSP` → `卸 B` / `Org3MSP` → `販売店 C`）
 - [ ] 履歴は表形式（`#1 CREATE A / #2 TRANSFER A→B`）
 - [ ] 色 or 強調（bold / 罫線）で重要箇所ハイライト
 - [ ] 不要なログ抑制（`set -x` 禁止）

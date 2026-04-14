@@ -56,8 +56,13 @@ hl-proto/
 
 ### Endorsement Policy
 - 3Org `OR` ポリシー明示必須:
-  - `OR('OrgAMSP.peer','OrgBMSP.peer','OrgCMSP.peer')`
+  - `OR('Org1MSP.peer','Org2MSP.peer','Org3MSP.peer')`
 - invoke 時 `--peerAddresses` を endorsement policy に合致させる
+
+### MSP ID の扱い（Issue #1 決定事項）
+- 内部 MSP ID は fabric-samples 標準の `Org1MSP` / `Org2MSP` / `Org3MSP` をそのまま使用
+- 業務語彙（メーカー A / 卸 B / 販売店 C）への変換は T5-3 出力整形層で行う
+- 対応関係: `Org1MSP` = メーカー A / `Org2MSP` = 卸 B / `Org3MSP` = 販売店 C
 
 ### スクリプト規約
 - bash 全て `set -euo pipefail`

@@ -17,7 +17,7 @@
 
 ## T5-3 出力整形ライブラリ
 - bash 関数 or jq テンプレ
-- 組織コード → 業務語彙（`OrgAMSP` → `メーカー A`）
+- 組織コード → 業務語彙（`Org1MSP` → `メーカー A` / `Org2MSP` → `卸 B` / `Org3MSP` → `販売店 C`）
 - 履歴 表形式: `#1 CREATE A / #2 TRANSFER A→B / #3 TRANSFER B→C`
 - 生 JSON 直接表示 禁止
 
