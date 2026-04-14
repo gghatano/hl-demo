@@ -1,0 +1,35 @@
+# Fabric 取得物（setup.sh で clone / download）
+fabric/fabric-samples/
+fabric/install-fabric.sh
+
+# 環境変数 / シークレット
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+npm-debug.log*
+package-lock.json.bak
+
+# 生成物
+chaincode/product-trace/dist/
+organizations/
+channel-artifacts/
+*.tar.gz
+
+# ログ
+*.log
+logs/
+
+# OS / エディタ
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~
+
+# 一時
+tmp/
+.tmp/
