@@ -1,0 +1,42 @@
+name: 🔧 技術タスク
+description: ユーザー価値に直接紐付かない内部改善（リファクタ・CI 整備・依存更新等）。乱用禁止。まずユーザーストーリーで書けないか検討すること。
+title: "[Tech] <内容>"
+labels: ["tech-task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **原則 このテンプレは使わない。** ユーザーストーリーで書けないか先に検討してください。
+        許容例: 依存ライブラリ更新、CI パイプライン整備、内部リファクタ。
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: 動機
+      description: なぜ今やるのか。やらないとどうなるのか。最終的にどのユーザー価値に繋がるのか。
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: 作業内容
+    validations:
+      required: true
+
+  - type: textarea
+    id: done
+    attributes:
+      label: 完了条件
+      value: |
+        - [ ]
+    validations:
+      required: true
+
+  - type: input
+    id: related-story
+    attributes:
+      label: 紐付くユーザーストーリー Issue
+      placeholder: "#123"
+    validations:
+      required: false

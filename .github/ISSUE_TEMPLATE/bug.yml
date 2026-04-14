@@ -1,0 +1,60 @@
+name: 🐛 バグ報告
+description: 期待と異なる挙動。ユーザーが どう困っているか から書く。
+title: "[Bug] <ユーザー影響を1行で>"
+labels: ["bug"]
+body:
+  - type: textarea
+    id: user-impact
+    attributes:
+      label: ユーザー影響
+      description: 誰が / 何ができなくなっているか
+      placeholder: |
+        販売店 C が履歴照会しようとすると空配列が返り、
+        仕入れ判断ができない。
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: 再現手順
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待結果
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の結果
+      description: エラーメッセージ / ログは原文そのまま
+    validations:
+      required: true
+
+  - type: textarea
+    id: env
+    attributes:
+      label: 環境
+      value: |
+        - OS:
+        - Docker:
+        - Fabric:
+        - Node.js:
+    validations:
+      required: true
+
+  - type: input
+    id: spec-ref
+    attributes:
+      label: 関連 spec.md 節
+    validations:
+      required: false

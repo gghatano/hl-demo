@@ -1,0 +1,99 @@
+name: 🎯 ユーザーストーリー
+description: ユーザー価値起点の Issue。「誰が」「何を」「なぜ」から書く。
+title: "[Story] <ユーザー視点の成果を1行で>"
+labels: ["user-story"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 書き方の原則
+        - ❌ 「CreateProduct 関数を実装する」
+        - ✅ 「メーカー A が製品を登録でき、以降の流通を追跡開始できる」
+        - **機能ではなく価値から書く**。実装手段はタスク分解で後述。
+
+  - type: textarea
+    id: story
+    attributes:
+      label: ユーザーストーリー
+      description: "As a / I want / So that 形式"
+      value: |
+        **As a** <利用者の役割（例: 販売店 C の担当者）>
+        **I want** <実現したい行動（例: 仕入れた製品の来歴を確認する）>
+        **So that** <得られる価値（例: 偽装転売品を掴まされない）>
+    validations:
+      required: true
+
+  - type: textarea
+    id: value
+    attributes:
+      label: 提供価値 / Why
+      description: この Story が無い世界で 誰が / 何に困っているか
+      placeholder: |
+        販売店 C は仕入れ時、製品が正規流通品か確認する手段がない。
+        Excel 台帳は改ざん可能で信頼できない。台帳の改ざん困難性を担保することで、
+        仕入れ判断の安心感と説明責任を得られる。
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 受け入れ条件（Given / When / Then）
+      description: このストーリーが「完了した」と言える具体条件
+      value: |
+        - [ ] Given <前提>
+              When <操作>
+              Then <期待結果>
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: スコープ外
+      description: 混同されがちだが今回やらないこと
+      placeholder: |
+        - 物理製品と productId の紐付け（QR/RFID）
+        - 権限管理強化
+    validations:
+      required: false
+
+  - type: textarea
+    id: tasks
+    attributes:
+      label: 実装タスク分解（後から追記可）
+      description: 価値を実現するための具体作業。PR はこの単位で切る。
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 優先度（MoSCoW）
+      options:
+        - Must
+        - Should
+        - Could
+        - Won't
+    validations:
+      required: true
+
+  - type: input
+    id: spec-ref
+    attributes:
+      label: 関連 spec.md 節
+      placeholder: "例: §7.2, §9.1 N2"
+    validations:
+      required: false
+
+  - type: input
+    id: phase
+    attributes:
+      label: 関連 Phase
+      placeholder: "例: Phase 3 / Phase 5"
+    validations:
+      required: false
