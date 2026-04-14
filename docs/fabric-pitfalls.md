@@ -92,6 +92,23 @@
 - メモリ 4GB 未満 → chaincode build OOM
 - `.wslconfig` で 8GB 推奨
 
+## reset 時の "no such volume" エラー
+
+`network.sh down` 実行時に以下のエラーが出るが **無視してよい**:
+```
+Error response from daemon: get docker_orderer.example.com: no such volume
+Error response from daemon: get docker_peer0.org1.example.com: no such volume
+```
+- 原因: test-network が旧 `docker-compose` プレフィックス付き volume（`docker_*`）を互換目的で削除試行
+- 現行 Docker Compose v2 は `compose_*` プレフィックスを使うため対象 volume 不在
+- 実害なし。`scripts/reset.sh` は最終 `verify_clean` で残留確認するため、エラー見逃しリスクなし
+
+## busybox:latest 取得
+
+`network.sh down` 初回実行時に `busybox:latest` が pull される。
+- test-network 内部のクリーンアップに使用
+- 想定動作、停止してはいけない
+
 ## MVCC_READ_CONFLICT
 
 - 同一 key を同一ブロック内で複数 tx が更新 → 後続 tx 失敗
