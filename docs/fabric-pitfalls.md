@@ -274,3 +274,42 @@ Phase 4 deploy レビューで指摘された Major。
 - 同一 key を同一ブロック内で複数 tx が更新 → 後続 tx 失敗
 - デモでは直列実行なので通常発生しないが、並列 invoke する test で起きる
 - 対策: テストで sleep or sequential 実行
+
+## peer CLI ログ抑制 (demo 向け)
+
+Phase 5 demo_normal.sh で遭遇。
+
+- `peer chaincode invoke` の成功時ログ (ClientWait committed / status:200 payload...)
+  は **stderr** に出る。`>/dev/null` だけではナレーションが埋もれる
+- demo 系は `>/dev/null 2>&1` で両方抑制し、整形済の ReadProduct / GetHistory 出力で
+  結果を見せる。ただし L2 test や demo_error は stderr を握って errorCode 抽出するので
+  一律 `2>&1` は不可
+- エラーメッセージは `peer chaincode invoke` の non-zero 終了 + stderr 本文に乗る。
+  成功時 stderr は INFO 多発、失敗時 stderr は ERROR メッセージ、という非対称を前提に
+  scripts を書き分ける
+
+## bash サブシェルでテスト集計すると親の値を継承する
+
+Phase 5 T5-5 test_integration.sh で遭遇。
+
+- ケースを `( source "${c}" )` でサブシェル化すると、構文エラー脱出や `set -e` の
+  波及を親から隔離できる → 1 件の壊れたケースで全停止しなくなる
+- 罠: 子シェルは親の環境変数 (TC_PASS 等) を **初期値として継承** する。子が
+  加算すると、子が書き出すのは「親の前回値 + 子の差分」。親がそれを単純加算すると
+  二重計上する
+- 対策: 子シェルの先頭で `TC_PASS=0 TC_FAIL=0 FAILED_CASES=()` と明示リセットし、
+  子は差分のみを tempfile に書く。親は差分として加算する
+- 再現性のデバッグ: L2 ケース数を意図的に知っている状態で動かして `total` が膨らむか
+  を最初にチェック。pass/fail 数だけ見て OK 判定すると気付けない
+
+## reset.sh の確認プロンプトを --fresh 系スクリプトから呼ぶ場合
+
+Phase 5 T5-5 test_integration.sh / T5-1 demo_normal.sh で遭遇。
+
+- `reset.sh` は破壊的操作のため `read -p "続行しますか? [y/N]"` の対話確認あり
+- `test_integration.sh --fresh` / `demo_normal.sh --fresh` から `reset.sh` を呼ぶと
+  ここで止まり、tail -200 しか見ていないと「キャンセル」の一行だけ流れて
+  理由不明で失敗に見える
+- 呼び出し側は `reset.sh --yes` を明示的に渡す。直接コマンドラインで実行するとき
+  のみ確認を効かせる、というのが正しい設計
+- `--fresh` フラグ自体が「破壊を許可する」意図表明なので二重確認は不要
