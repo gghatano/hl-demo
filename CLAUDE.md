@@ -42,9 +42,10 @@ hl-proto/
 
 ### Phase 進行
 - Phase 単位で進める（`docs/tasks/phase*/tasks.md`）
-- Phase 開始前 ユーザー承認必須
+- Phase 開始時 `/phase-start <phase番号>` でコンテキスト読込 + サブタスク登録 + ユーザー承認
 - Phase 完了時 `/phase-review <phase番号>` でレビュー依頼発火
 - レビュー指摘は次 Phase 前に解消
+- 運用プロトコル詳細: `docs/tasks/README.md#Phase 運用プロトコル`
 
 ### Chaincode 実装制約（Fabric 決定性）
 - ❌ `Date.now()` / `Math.random()` / 環境変数 / 外部 HTTP
