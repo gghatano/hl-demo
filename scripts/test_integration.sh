@@ -32,14 +32,24 @@ if ((FRESH)); then
   "${SCRIPT_DIR}/deploy_chaincode.sh"
 fi
 
-# preflight
-if ! command -v jq >/dev/null 2>&1; then
-  echo "[test_integration] jq required" >&2; exit 1
-fi
+# preflight: 新人環境で「invoke failed」だけ出て迷子化しないよう、依存を明示
+fail_pre() { echo "[test_integration] $*" >&2; exit 1; }
+
+command -v jq     >/dev/null 2>&1 || fail_pre "jq が必要（apt install jq）"
+command -v docker >/dev/null 2>&1 || fail_pre "docker が必要"
+docker info       >/dev/null 2>&1 || fail_pre "docker daemon に接続できない（WSL2 では sg docker -c で実行するか newgrp docker）"
+
+SAMPLES_DIR="${REPO_ROOT}/fabric/fabric-samples"
+PEER_BIN="${SAMPLES_DIR}/bin/peer"
+[[ -x "${PEER_BIN}" ]] || fail_pre "peer binary 不在: ${PEER_BIN} (先に ./scripts/setup.sh)"
 
 INVOKE="${SCRIPT_DIR}/invoke_as.sh"
-[[ -x "${INVOKE}" ]] || { echo "invoke_as.sh not executable: ${INVOKE}" >&2; exit 1; }
+[[ -x "${INVOKE}" ]] || fail_pre "invoke_as.sh not executable: ${INVOKE}"
 export INVOKE
+
+if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^peer0.org1.example.com$'; then
+  fail_pre "Fabric ネットワーク未起動。./scripts/test_integration.sh --fresh か ./scripts/network_up.sh を先に"
+fi
 
 # 共通 source
 # shellcheck source=/dev/null
@@ -65,11 +75,42 @@ if ((${#cases[@]} == 0)); then
   echo "[test_integration] no cases found" >&2; exit 1
 fi
 
+# 各 case は子シェルで実行し、1 件の構文/exit エラーで全停止しないようにする。
+# 子シェルのカウンタは tempfile に吐き出して親で集計する。
+TC_TMP="$(mktemp -t hl-l2-XXXXXX)"
+trap 'rm -f "${TC_TMP}"' EXIT
+
 for c in "${cases[@]}"; do
   echo
   echo "================ ${c##*/} ================"
-  # shellcheck source=/dev/null
-  source "${c}"
+  if ! bash -n "${c}" 2>&1; then
+    tc_fail "case ${c##*/}: syntax error"
+    continue
+  fi
+  (
+    # サブシェルで source。set -e の脱出や変数破壊が親に波及しない。
+    # 子は差分だけをカウントするよう親の値をリセットしてから開始。
+    TC_PASS=0
+    TC_FAIL=0
+    FAILED_CASES=()
+    # shellcheck source=/dev/null
+    source "${c}"
+    printf '%s\n%s\n' "${TC_PASS}" "${TC_FAIL}" > "${TC_TMP}"
+    for f in "${FAILED_CASES[@]+"${FAILED_CASES[@]}"}"; do
+      printf 'F\t%s\n' "${f}" >> "${TC_TMP}"
+    done
+  ) || tc_fail "case ${c##*/}: aborted (rc=$?)"
+
+  if [[ -s "${TC_TMP}" ]]; then
+    sub_pass=$(sed -n '1p' "${TC_TMP}")
+    sub_fail=$(sed -n '2p' "${TC_TMP}")
+    TC_PASS=$((TC_PASS + ${sub_pass:-0}))
+    TC_FAIL=$((TC_FAIL + ${sub_fail:-0}))
+    while IFS=$'\t' read -r mark msg; do
+      [[ "${mark}" == "F" ]] && FAILED_CASES+=("${msg}")
+    done < <(sed -n '3,$p' "${TC_TMP}")
+    : > "${TC_TMP}"
+  fi
 done
 
 tc_summary

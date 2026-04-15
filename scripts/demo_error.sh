@@ -50,10 +50,11 @@ show_history() {
 }
 
 # ---------- E1 ----------
-say_section "E1: 所有者偽装 (fromOwner を偽って transfer)"
-say_note "攻撃者シナリオ: 実際は別組織が所有している product を、"
-say_note "あたかも自分が直前の所有者であるかのように fromOwner を偽る。"
-say_step "Org3 から TransferProduct ${PRODUCT_ID} fromOwner=Org2MSP toOwner=Org3MSP"
+say_section "E1: 所有者偽装 (販売店 C が卸 B を騙って横取り)"
+say_note "攻撃者シナリオ: 販売店 C が 卸 B を装い、"
+say_note "「これは直前まで B が持っていた product だ」と嘘の由来を主張して"
+say_note "自分への譲渡を台帳に書き込もうとする。chaincode の MSP 検証に掛ける。"
+say_step "販売店 C (Org3) から TransferProduct ${PRODUCT_ID} fromOwner=Org2MSP(卸B) toOwner=Org3MSP(販売店C)"
 set +e
 out=$("${INVOKE}" org3 invoke TransferProduct "${PRODUCT_ID}" Org2MSP Org3MSP 2>&1)
 rc=$?
@@ -78,6 +79,8 @@ rc=$?
 set -e
 code=$(extract_error_code "${out}")
 say_note "exit=${rc}, errorCode=${code:-<none>}"
+say_note "※ E2 は読み取り専用の照会。書き込みは一切発生しないので、"
+say_note "   履歴再照会による二段構え確認は原理的に不要（汚染しようがない）。"
 pause
 
 # ---------- E3 ----------

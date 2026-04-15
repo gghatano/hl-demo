@@ -11,6 +11,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # shellcheck source=/dev/null
 source "${SCRIPT_DIR}/lib/format.sh"
 
@@ -19,8 +20,16 @@ PAUSE="${DEMO_PAUSE:-1.5}"
 pause() { sleep "${PAUSE}" 2>/dev/null || true; }
 
 PRODUCT_ID="${1:-}"
+# 引数省略時: demo_normal.sh が残した .last_product_id を拾う
+if [[ -z "${PRODUCT_ID}" && -f "${REPO_ROOT}/.last_product_id" ]]; then
+  PRODUCT_ID="$(cat "${REPO_ROOT}/.last_product_id")"
+fi
 if [[ -z "${PRODUCT_ID}" ]]; then
-  echo "Usage: $(basename "$0") <productId>" >&2
+  cat >&2 <<EOF
+Usage: $(basename "$0") [productId]
+  productId 省略時は直近の demo_normal.sh が書いた .last_product_id を読む
+  環境変数: DEMO_PAUSE (既定 1.5 秒) で pause 間隔を調整
+EOF
   exit 2
 fi
 

@@ -15,6 +15,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+export REPO_ROOT
 # shellcheck source=/dev/null
 source "${SCRIPT_DIR}/lib/format.sh"
 
@@ -65,7 +66,7 @@ if ((FRESH)); then
   "${SCRIPT_DIR}/deploy_chaincode.sh"
 fi
 
-PRODUCT_ID="${PRODUCT_ID:-DEMO-$(date +%s)}"
+PRODUCT_ID="${PRODUCT_ID:-DEMO-$(date +%s)-$$}"
 say_note "今回の productId: ${PRODUCT_ID}"
 pause
 
@@ -100,4 +101,14 @@ pause
 say_narration "■ ここまでが正常フロー"
 say_note "次は異常系: ./scripts/demo_error.sh ${PRODUCT_ID}"
 say_note "C の立場で起点 A を確認する決め場面: ./scripts/demo_verify_as_c.sh ${PRODUCT_ID}"
+
+# 後続デモが引数省略で拾えるよう、直近の productId を置く
+echo "${PRODUCT_ID}" > "${REPO_ROOT}/.last_product_id" 2>/dev/null || true
+
+echo
+say_narration "■ スコープと限界（経営層向け 30 秒）"
+say_note "このデモが示すのは「台帳に載った情報は改ざんされない」こと。"
+say_note "逆に言えば、台帳に載せる前の「モノ自体の真正性」── 現物のすり替えや"
+say_note "偽タグ貼付 ── は別レイヤーの論点であり、QR/RFID/IoT との組み合わせで補う。"
+say_note "本 PoC はあくまで 組織間で譲渡履歴を共有・検証 する部分を扱う。"
 echo
