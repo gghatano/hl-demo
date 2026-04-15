@@ -196,6 +196,29 @@ Phase 3 GetHistory 実装で整理したこと。
 - contract 側は `if (!raw || raw.length === 0)` で両対応しておけば安全
 - 片側だけを判定する（例: `raw === null`）と本番 vs mock で挙動割れ
 
+## Fabric 2.5.10 以前 × Docker 29+ は chaincode install が壊れる
+
+Phase 4 deploy で踏んだ。
+
+- Fabric 2.5.10 以前の peer は `github.com/fsouza/go-dockerclient` を使って chaincode
+  image を build する。Docker 29 / API 1.54 ではこのクライアントと daemon の
+  プロトコル互換が切れ、`write unix @->/run/docker.sock: write: broken pipe` で
+  install が落ちる
+- peer ログに以下が出ていれば確定:
+  ```
+  [dockercontroller] buildImage -> Error building image: write unix @->/run/docker.sock: write: broken pipe
+  [chaincode.platform] func1 -> io: read/write on closed pipe
+  ```
+- 直前に `[ccaas_builder] ::Error: chaincode type not supported: node` が出るのは別物で、
+  ccaas external builder が node type を扱えないだけ。問題は次段の dockercontroller fallback
+- **対策: Fabric を v2.5.15 以上に上げる**
+  - 修正 PR: hyperledger/fabric#5355（`go-dockerclient` → `moby/client` 置換）
+  - `scripts/setup.sh` の `FABRIC_VERSION` / `CA_VERSION` を更新 → `./scripts/reset.sh --yes`
+    → `./scripts/setup.sh --force` → `./scripts/network_up.sh` → `./scripts/deploy_chaincode.sh`
+- 言語を Go に書き直しても解決しない。`dockercontroller.buildImage` 経路は node/go 共通で踏む
+- 根因は **pin 時に upstream 最新を確認しなかった** こと。2.5.10 は 2024-09 リリース、
+  2.5.15 は 2026-02。pin する瞬間に GitHub releases を叩く運用必須
+
 ## MVCC_READ_CONFLICT
 
 - 同一 key を同一ブロック内で複数 tx が更新 → 後続 tx 失敗

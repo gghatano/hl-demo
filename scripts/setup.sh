@@ -8,8 +8,8 @@
 set -euo pipefail
 
 # ===== バージョン固定 =====
-FABRIC_VERSION="2.5.10"
-CA_VERSION="1.5.13"
+FABRIC_VERSION="2.5.15"
+CA_VERSION="1.5.18"
 # fabric-samples は v2.4.9 以降 tag 廃止 → main の commit を固定
 # 更新時は `git ls-remote https://github.com/hyperledger/fabric-samples.git refs/heads/main` で取得
 FABRIC_SAMPLES_COMMIT="bf7e75c6c159dc1959f3bb8979ed739171673b4d"
