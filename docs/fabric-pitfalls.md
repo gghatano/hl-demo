@@ -109,6 +109,48 @@ Error response from daemon: get docker_peer0.org1.example.com: no such volume
 - test-network 内部のクリーンアップに使用
 - 想定動作、停止してはいけない
 
+## `organizations/` は「生成物 + 付属スクリプト」の混在ディレクトリ
+
+Phase 2 reset スクリプトで踏んだバグ。
+
+- `fabric-samples/test-network/organizations/` は `network.sh up` 時に生成される
+  `peerOrganizations/` / `ordererOrganizations/` と、**Git 管理の付属スクリプト**
+  (`ccp-generate.sh` / `cfssl/*` / `cryptogen/*` / `fabric-ca/registerEnroll.sh`
+  / `fabric-ca/*/fabric-ca-server-config.yaml`) が同居している
+- **`rm -rf organizations/` すると付属スクリプトまで消え、次の `network.sh up` が
+  `createOrg1: command not found` 等で死ぬ**
+- reset で消してよいのは生成サブディレクトリのみ:
+  ```sh
+  rm -rf organizations/peerOrganizations organizations/ordererOrganizations
+  rm -rf channel-artifacts addOrg3/channel-artifacts
+  rm -rf addOrg3/fabric-ca/org3/{msp,tls-cert.pem,ca-cert.pem,IssuerPublicKey,IssuerRevocationPublicKey,fabric-ca-server.db}
+  ```
+- 誤って消した場合の復旧: `cd fabric-samples && git checkout -- test-network/organizations test-network/addOrg3`
+
+## 期待稼働コンテナ数は 8（CA は 4 個）
+
+- peer 3 + orderer 1 + **CA 4** = 8
+- CA は `ca_org1` / `ca_org2` / `ca_org3` / **`ca_orderer`** の 4 個。orderer 用 CA を忘れがち
+- アサートで `7` と書くと常に失敗する
+
+## `bin/peer` 直呼びには `FABRIC_CFG_PATH` が必須
+
+`scripts/network_up.sh` Org3 疎通確認で踏んだ罠。
+
+- `fabric-samples/bin/peer` を直接実行するには `core.yaml` 探索用の設定パスが必要
+- `FABRIC_CFG_PATH=${SAMPLES_DIR}/config` を export しないと起動失敗（エラー不明瞭）
+- test-network の `./network.sh` 経由だと内部で設定されるので気付きにくい
+- Phase 4 `deploy_chaincode.sh` / `invoke_as.sh` でも同じ対応が必要
+
+## sudo でスクリプト実行すると root 所有ファイルが残る
+
+- WSL2 等で docker グループ未設定の環境だと `sudo ./scripts/reset.sh` 運用になる
+- `network.sh up` が作る `organizations/peerOrganizations/` 等が **root 所有** になる
+- 次に非 sudo で git 操作すると "Permission denied" で復旧不能
+- 対策:
+  - docker グループに加入（`sudo usermod -aG docker $USER` → 再ログイン）が本筋
+  - 暫定: 復旧時は `sudo chown -R $USER:$USER fabric-samples` で所有権を戻してから git 操作
+
 ## MVCC_READ_CONFLICT
 
 - 同一 key を同一ブロック内で複数 tx が更新 → 後続 tx 失敗

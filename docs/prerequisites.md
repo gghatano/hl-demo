@@ -48,6 +48,16 @@ processors=4
 ```
 変更後 `wsl --shutdown` で再起動。
 
+### docker グループ加入（推奨・Phase 2 実運用で判明）
+```sh
+sudo usermod -aG docker $USER
+# 反映のため一度ログアウト → ログインし直す
+```
+- 未加入だと `./scripts/reset.sh` / `./scripts/network_up.sh` を **sudo で実行せざるを得ない**
+- sudo 実行すると `fabric-samples/test-network/organizations/` が **root 所有** で生成され、
+  次回 git 操作が "Permission denied" で詰まる（`fabric-pitfalls.md` 参照）
+- 暫定復旧: `sudo chown -R $USER:$USER fabric-samples`
+
 ### WSL2 追加注意
 - **Docker Desktop 連携必須**: Linux 側直接 daemon を起動すると Windows 側 image と共有不可
 - **cgroup v2**: Ubuntu 22.04 WSL2 は v2 既定。Fabric 2.5 は対応済だが、古い Docker（<20.10）で v2 + chaincode 起動失敗事例あり
