@@ -163,10 +163,11 @@ do_install_all() {
   done
 
   set_org_env 1
+  # queryinstalled 出力例:
+  #   Package ID: product-trace_1.0:abc..., Label: product-trace_1.0
   PACKAGE_ID="$(
     "${PEER_BIN}" lifecycle chaincode queryinstalled \
-      | awk -v lbl="${CC_LABEL}" '$0 ~ "Label: "lbl { print prev } { prev=$0 }' \
-      | sed -n 's/^Package ID: \([^,]*\),.*/\1/p' \
+      | sed -n "s/^Package ID: \([^,]*\), Label: ${CC_LABEL}\$/\1/p" \
       | head -n1
   )"
   [[ -n "${PACKAGE_ID}" ]] || { err "package ID 取得失敗"; exit 1; }
