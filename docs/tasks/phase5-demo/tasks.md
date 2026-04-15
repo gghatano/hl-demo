@@ -1,5 +1,14 @@
 # Phase 5: デモシナリオ
 
+## Phase 3 からの申し送り（fabric-pitfalls.md 参照）
+- chaincode エラーは message 先頭に `[CODE]` プレフィックス付き
+  （例: `[OWNER_MISMATCH] ...`、`[PRODUCT_NOT_FOUND] ...`）
+- `demo_error.sh` / `test_integration.sh` で異常系を判定する際は
+  `grep '\[OWNER_MISMATCH\]'` のように **エラーコード単位で grep** すること
+  （message 本文の日本語変化に壊れない）
+- `GetHistory` 応答の `actor` は `{mspId, id}` オブジェクト。
+  T5-3 出力整形では `actor.mspId` を業務語彙にマップする
+
 ## T5-0 冒頭ナレーション
 - `demo_normal.sh` 先頭で echo
 - 課題提起: 偽装転売・中抜きの痛み

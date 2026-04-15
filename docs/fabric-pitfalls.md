@@ -151,6 +151,51 @@ Phase 2 reset スクリプトで踏んだバグ。
   - docker グループに加入（`sudo usermod -aG docker $USER` → 再ログイン）が本筋
   - 暫定: 復旧時は `sudo chown -R $USER:$USER fabric-samples` で所有権を戻してから git 操作
 
+## chaincode エラーは message 本文しか伝搬しない
+
+Phase 3 で判明。
+
+- `throw new Error('...')` は endorsement failure として返るが、クライアント側
+  （`peer chaincode invoke` / SDK）で取得できるのは **message 本文のみ**
+- `err.code` / `err.name` / カスタムフィールドはレスポンスに乗らない
+- L2/L3 テストや `demo_error.sh` で「どのエラーか」を判定したい場合、
+  message 先頭に識別子を埋め込むのが唯一の実用解
+- 本リポの採用形式:
+  ```js
+  throw new ChaincodeError(ErrorCodes.OWNER_MISMATCH, '...');
+  // => message = "[OWNER_MISMATCH] ..."
+  ```
+- これで `grep '\[OWNER_MISMATCH\]'` が使える
+
+## GetHistoryForKey は state 変遷のスナップショット列
+
+Phase 3 GetHistory 実装で整理したこと。
+
+- 返り値は **key に紐づく各 putState 時点の state 全体** を新→旧の順に列挙する
+  iterator。「イベントログ」ではない
+- 呼び出し元の clientIdentity や引数は **履歴には残らない**。
+  知りたければ state 本体に埋め込んでおくしかない
+- 本リポでは `product.lastActor = { mspId, id }` を putState 毎に更新し、
+  GetHistory 側で各スナップショットから復元する方式を採用
+- CREATE / TRANSFER の区別も state の差分（`currentOwner` 変化）から推論する必要がある
+- 順序は実装依存（一般に降順）なので、昇順表示したい場合は受け取って `reverse()` 推奨
+- `isDelete === true` の entry は state 値が空なのでスキップ必須
+
+## GetHistory の CREATE 判定は `events.length === 0` で
+
+- 「先頭 entry = CREATE」判定を naive に `firstSeen` フラグで書くと、
+  **先頭 entry が `isDelete=true`** のとき次 entry も `firstSeen` のままで CREATE 扱いされる
+- 先頭 isDelete は DeleteState → 再 Create の理論ケース。通常起きないが堅牢性で抑えたい
+- 対策: 判定を `if (events.length === 0)` にする。events に積まれていなければ CREATE
+
+## L1 mock と実 fabric-shim の微妙な差分
+
+- `ctx.stub.getState(key)` の未登録キー時の戻り値:
+  - 実 fabric-shim: **`null`**
+  - 自前 mock（`Buffer.from('')`）: **空 Buffer**
+- contract 側は `if (!raw || raw.length === 0)` で両対応しておけば安全
+- 片側だけを判定する（例: `raw === null`）と本番 vs mock で挙動割れ
+
 ## MVCC_READ_CONFLICT
 
 - 同一 key を同一ブロック内で複数 tx が更新 → 後続 tx 失敗
