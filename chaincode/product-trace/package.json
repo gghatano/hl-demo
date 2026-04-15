@@ -1,0 +1,25 @@
+{
+  "name": "product-trace",
+  "version": "1.0.0",
+  "description": "Hyperledger Fabric chaincode: supply chain product trace (A->B->C)",
+  "main": "index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "fabric-chaincode-node start",
+    "test": "mocha test --recursive --reporter spec",
+    "test:watch": "mocha test --recursive --watch"
+  },
+  "dependencies": {
+    "fabric-contract-api": "^2.5.4",
+    "fabric-shim": "^2.5.4"
+  },
+  "devDependencies": {
+    "chai": "^4.3.10",
+    "chai-as-promised": "^7.1.1",
+    "mocha": "^10.2.0",
+    "sinon": "^17.0.1",
+    "sinon-chai": "^3.7.0"
+  }
+}
