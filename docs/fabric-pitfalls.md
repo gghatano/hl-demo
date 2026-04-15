@@ -219,6 +219,56 @@ Phase 4 deploy で踏んだ。
 - 根因は **pin 時に upstream 最新を確認しなかった** こと。2.5.10 は 2024-09 リリース、
   2.5.15 は 2026-02。pin する瞬間に GitHub releases を叩く運用必須
 
+## chaincode package に node_modules を含めると peer build が broken pipe で落ちる
+
+Phase 4 deploy で Fabric を 2.5.15 に上げる前に踏んだ二次的な罠。
+
+- `peer lifecycle chaincode package` は `--path` 配下を丸ごと tar する
+- Node chaincode は開発中に `npm install` で `node_modules/` を作る (L1 テスト用)
+- そのまま `--path chaincode/product-trace` すると node_modules 込みの tar を
+  peer に送り込み、peer 側の docker build で context が肥大 → stream 切れ
+- 症状は Docker 29 互換問題と似た `broken pipe` だが、root cause が別
+  (Docker 互換問題は 1 回の install がそもそも通らない、こちらは package 肥大化)
+
+**対策**: staging ディレクトリ経由で不要物を除外してから package する
+```bash
+STAGE=build/stage-${CC_NAME}
+rm -rf "${STAGE}" && mkdir -p "${STAGE}"
+tar --exclude='node_modules' --exclude='test' --exclude='coverage' \
+    -C "${CC_SRC}" -cf - . | tar -C "${STAGE}" -xf -
+peer lifecycle chaincode package ... --path "${STAGE}"
+```
+
+fabric-samples が `.fabricignore` を認識しないため、ignore ファイル方式は不可。
+staging が唯一の実用解。
+
+## lifecycle chaincode の skip 判定は seq/ver だけでなく package_id まで見る
+
+Phase 4 deploy レビューで指摘された Major。
+
+- `peer lifecycle chaincode queryapproved` は approved 済定義を JSON で返す。
+  構造 (2.5.15 時点):
+  ```json
+  {"version":"1.0","sequence":1,
+   "source":{"Type":{"LocalPackage":{"package_id":"<label>:<sha>"}}}}
+  ```
+- 「再 approve するか」を seq/ver 一致だけで判定すると、chaincode ソースが変わり
+  package hash (sha256) が変わっても「approve 済」扱いになり、commit 段の
+  checkcommitreadiness を通過してしまい、invoke 時に古い approval と新 install の
+  不整合で壊れる。CI が無いと発見が遅れる
+- 正しい skip 判定:
+  ```bash
+  queryapproved --output json \
+    | jq -e --arg v "$V" --argjson s "$S" --arg p "$PKG_ID" \
+        '.version==$v and .sequence==$s
+         and .source.Type.LocalPackage.package_id==$p'
+  ```
+- 同様に `querycommitted` は `checkcommitreadiness` より **先** に実行すべき。
+  既 commit 済 seq を readiness に渡すと
+  `requested sequence is X, but new definition must be sequence X+1` で落ちる
+- `queryinstalled` のパースも `grep "Label: ..."` ではなく JSON + jq。
+  Label 部分一致で別 CC にヒットする穴を塞ぐ
+
 ## MVCC_READ_CONFLICT
 
 - 同一 key を同一ブロック内で複数 tx が更新 → 後続 tx 失敗
