@@ -313,3 +313,44 @@ Phase 5 T5-5 test_integration.sh / T5-1 demo_normal.sh で遭遇。
 - 呼び出し側は `reset.sh --yes` を明示的に渡す。直接コマンドラインで実行するとき
   のみ確認を効かせる、というのが正しい設計
 - `--fresh` フラグ自体が「破壊を許可する」意図表明なので二重確認は不要
+
+## docker logs / docker rm に dev-peer ワイルドカードは渡らない
+
+Phase 6 T6-1 README のトラブルシュート節で遭遇（レビュー指摘）。
+
+- chaincode コンテナ名は `dev-peer0.org1.example.com-product-trace_1.0-<hash>` の
+  ようにビルドごとに hash サフィックスが変わる
+- ドキュメントで `docker logs dev-peer0.org1.*product-trace_1.0-* | tail` と
+  書きたくなるが、**docker logs は引数に glob を展開しない**。bash の glob も
+  コンテナ名はファイル名ではないため `*` がそのまま渡って失敗する
+- 正解: `docker ps --format '{{.Names}}' | grep ...` で名前を動的取得し変数経由:
+  ```bash
+  DEV_CC=$(docker ps --format '{{.Names}}' | grep '^dev-peer0.org1.*product-trace' | head -1)
+  [[ -n "$DEV_CC" ]] && docker logs "$DEV_CC" | tail -100
+  ```
+- `docker rm` も同じ。reset.sh では `docker ps -aq --filter 'name=dev-peer'` で
+  ID を拾う設計になっている。ドキュメントのコピペコマンドもこの形に揃える
+
+## デモ所要時間は invoke レイテンシ起点で見積もる
+
+Phase 6 T6-2 demo-scenarios.md の所要時間表で遭遇（レビュー指摘）。
+
+- Fabric invoke は endorsement + ordering + commit + peer validate を通るため
+  **1 回あたり実測 3〜6 秒** が下限
+- 正常系 N1〜N3 だけで invoke 3 + query 2 = 15〜30 秒が固定消費。これに
+  `DEMO_PAUSE` とナレーション音読を足すと「5 分ちょうど」はタイト
+- 初期見積もりは「5〜10 分」の幅で書き、Phase 7 のクリーン VM リハで実測校正する。
+  一度固めるとナレーションの「間」も設計できる
+- `demo_normal.sh` の `PAUSE="${DEMO_PAUSE:-1.2}"` は意図的な呼吸。0 にすると
+  タイムは縮むがナレーションが棒読みになる副作用あり
+
+## 「稼働コンテナ数」で健全性判定しない
+
+Phase 6 T6-3 architecture.md で遭遇（レビュー指摘）。
+
+- fabric-samples test-network は `-ca` オプションや CLI コンテナの有無で
+  稼働コンテナ数が 8 / 9 / 10 と揺れる
+- 「期待稼働 8 個」はその環境固有の観測値で普遍ではない。ドキュメントには
+  「約 N 個」「環境により ±1」と注記するか、**名前で判定** する
+  (`docker ps --filter 'name=peer0.org' | wc -l` 等)
+- 自動化の健全性チェックも数ではなく期待名の存在を grep するのが堅い
