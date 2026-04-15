@@ -64,6 +64,16 @@ FN="${1:-}"
 shift
 FN_ARGS=("$@")
 
+preflight() {
+  [[ -x "${PEER_BIN}" ]] || { err "peer binary 不在: ${PEER_BIN} (setup.sh 実行要)"; exit 1; }
+  [[ -f "${ORDERER_CA}" ]] || { err "orderer TLS CA 不在: ${ORDERER_CA} (network_up.sh 実行要)"; exit 1; }
+  if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^peer0.org1.example.com$'; then
+    err "Fabric ネットワーク未起動。先に ./scripts/network_up.sh を実行してください"
+    exit 1
+  fi
+}
+preflight
+
 case "${ORG_RAW}" in
   org1|1) ORG_N=1 ;;
   org2|2) ORG_N=2 ;;

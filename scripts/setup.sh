@@ -8,6 +8,11 @@
 set -euo pipefail
 
 # ===== バージョン固定 =====
+# NOTE: Fabric 2.5.15 / CA 1.5.18 は Docker 29+ 互換修正 (fabric PR #5355,
+#       go-dockerclient → moby/client 置換) を含む最初の 2.5 系 patch。
+#       これ未満だと node chaincode install が "broken pipe" で壊れる。
+#       詳細: docs/fabric-pitfalls.md §「Fabric 2.5.10 以前 × Docker 29+」
+#       pin 更新時は上流 release notes を必ず確認してから上げること。
 FABRIC_VERSION="2.5.15"
 CA_VERSION="1.5.18"
 # fabric-samples は v2.4.9 以降 tag 廃止 → main の commit を固定

@@ -152,8 +152,9 @@ do_install_all() {
   log "==== install on Org1/Org2/Org3 ===="
   for n in 1 2 3; do
     set_org_env "$n"
-    if "${PEER_BIN}" lifecycle chaincode queryinstalled 2>/dev/null \
-         | grep -q "Label: ${CC_LABEL}"; then
+    if "${PEER_BIN}" lifecycle chaincode queryinstalled --output json 2>/dev/null \
+         | jq -e --arg l "${CC_LABEL}" \
+             '.installed_chaincodes // [] | map(.label) | index($l)' >/dev/null; then
       ok "Org${n}: ${CC_LABEL} 既に install 済 → skip"
     else
       log "Org${n}: install ${PKG_FILE}"
@@ -163,26 +164,35 @@ do_install_all() {
   done
 
   set_org_env 1
-  # queryinstalled 出力例:
-  #   Package ID: product-trace_1.0:abc..., Label: product-trace_1.0
+  # 正確な label 一致で package ID を取るため JSON 出力 → jq
   PACKAGE_ID="$(
-    "${PEER_BIN}" lifecycle chaincode queryinstalled \
-      | sed -n "s/^Package ID: \([^,]*\), Label: ${CC_LABEL}\$/\1/p" \
+    "${PEER_BIN}" lifecycle chaincode queryinstalled --output json \
+      | jq -r --arg l "${CC_LABEL}" \
+          '.installed_chaincodes[] | select(.label==$l) | .package_id' \
       | head -n1
   )"
-  [[ -n "${PACKAGE_ID}" ]] || { err "package ID 取得失敗"; exit 1; }
+  [[ -n "${PACKAGE_ID}" ]] || { err "package ID 取得失敗 (label=${CC_LABEL})"; exit 1; }
   ok "package ID: ${PACKAGE_ID}"
 }
 
 # ===== 3) approve (3Org) =====
+# skip 判定は version / sequence / package_id の 3 点一致。
+# package_id まで見ないと、staging 差分で hash が変わったのに「approve 済」扱いされ、
+# commit / invoke 時に古い approval と新 install の不整合で壊れる
 do_approve_all() {
   log "==== approveformyorg on Org1/Org2/Org3 ===="
   for n in 1 2 3; do
     set_org_env "$n"
+    # queryapproved JSON 構造 (Fabric 2.5.15):
+    #   .version / .sequence / .source.Type.LocalPackage.package_id
     if "${PEER_BIN}" lifecycle chaincode queryapproved \
-         -C "${CHANNEL_NAME}" -n "${CC_NAME}" 2>/dev/null \
-         | grep -q "sequence: ${CC_SEQUENCE}, version: ${CC_VERSION},"; then
-      ok "Org${n}: seq=${CC_SEQUENCE} ver=${CC_VERSION} 既に approve 済 → skip"
+         -C "${CHANNEL_NAME}" -n "${CC_NAME}" --output json 2>/dev/null \
+         | jq -e --arg v "${CC_VERSION}" \
+                --argjson s "${CC_SEQUENCE}" \
+                --arg p "${PACKAGE_ID}" \
+             '.version==$v and .sequence==$s and .source.Type.LocalPackage.package_id==$p' \
+         >/dev/null; then
+      ok "Org${n}: seq=${CC_SEQUENCE} ver=${CC_VERSION} pkg=${PACKAGE_ID##*:} 既に approve 済 → skip"
       continue
     fi
     log "Org${n}: approveformyorg"
@@ -201,23 +211,36 @@ do_approve_all() {
 
 # ===== 4) commit readiness & commit =====
 do_commit() {
-  log "==== check commit readiness ===="
   set_org_env 1
-  "${PEER_BIN}" lifecycle chaincode checkcommitreadiness \
+
+  # 先に querycommitted: 既に同 ver/seq で commit 済なら checkcommitreadiness ごと skip
+  # (checkcommitreadiness は「次に commit すべき sequence」を要求するため、現 seq を
+  #  渡すと "requested sequence is X, but new definition must be sequence X+1" で落ちる)
+  if "${PEER_BIN}" lifecycle chaincode querycommitted \
+       -C "${CHANNEL_NAME}" -n "${CC_NAME}" --output json 2>/dev/null \
+       | jq -e --arg v "${CC_VERSION}" --argjson s "${CC_SEQUENCE}" \
+           '.version==$v and .sequence==$s' >/dev/null; then
+    ok "seq=${CC_SEQUENCE} ver=${CC_VERSION} 既に commit 済 → skip"
+    return
+  fi
+
+  log "==== check commit readiness ===="
+  local readiness
+  readiness="$("${PEER_BIN}" lifecycle chaincode checkcommitreadiness \
     --channelID "${CHANNEL_NAME}" \
     --name "${CC_NAME}" \
     --version "${CC_VERSION}" \
     --sequence "${CC_SEQUENCE}" \
     --signature-policy "${SIG_POLICY}" \
-    --output json
-
-  # 既に同 sequence で commit 済なら skip
-  if "${PEER_BIN}" lifecycle chaincode querycommitted \
-       -C "${CHANNEL_NAME}" -n "${CC_NAME}" 2>/dev/null \
-       | grep -q "Version: ${CC_VERSION}, Sequence: ${CC_SEQUENCE},"; then
-    ok "seq=${CC_SEQUENCE} ver=${CC_VERSION} 既に commit 済 → skip"
-    return
+    --output json)"
+  echo "${readiness}"
+  # PoC 規約: OR policy だが lifecycle は 3Org 全 approve を前提条件として強制する
+  if ! echo "${readiness}" | jq -e '[.approvals | to_entries[] | .value] | all' >/dev/null; then
+    err "3Org 全 approve が揃っていません (checkcommitreadiness):"
+    echo "${readiness}" | jq '.approvals' >&2
+    exit 1
   fi
+  ok "3Org 全 approve 確認"
 
   log "==== commit ===="
   # 3Org すべての peer を target にして OR policy 下で lifecycle endorsement を満たす
