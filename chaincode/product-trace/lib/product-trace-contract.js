@@ -49,6 +49,7 @@ class ProductTraceContract extends Contract {
     }
 
     const now = getTxTimestampISO(ctx);
+    const actor = getActor(ctx);
     const product = {
       productId,
       manufacturer,
@@ -56,6 +57,8 @@ class ProductTraceContract extends Contract {
       status: STATUS_ACTIVE,
       createdAt: now,
       updatedAt: now,
+      // lastActor: この version を書き込んだ主体。GetHistory で event.actor として emit する
+      lastActor: { mspId: actor.mspId, id: actor.id },
     };
     await ctx.stub.putState(productId, Buffer.from(JSON.stringify(product)));
     return JSON.stringify(product);
@@ -99,8 +102,10 @@ class ProductTraceContract extends Contract {
       );
     }
 
+    const actor = getActor(ctx);
     product.currentOwner = toOwner;
     product.updatedAt = getTxTimestampISO(ctx);
+    product.lastActor = { mspId: actor.mspId, id: actor.id };
     await ctx.stub.putState(productId, Buffer.from(JSON.stringify(product)));
     return JSON.stringify(product);
   }
@@ -122,6 +127,9 @@ class ProductTraceContract extends Contract {
     return raw.toString();
   }
 
+  // GetHistory: query only（state 書き換えなし）。
+  // putState を呼ばないので endorsement 時の MVCC_READ_CONFLICT には関与しない。
+  // `new Date().toISOString()` の入力は全て ledger 由来（km.timestamp）で決定的。
   async GetHistory(ctx, productId) {
     if (!productId) {
       throw new ChaincodeError(
@@ -130,9 +138,6 @@ class ProductTraceContract extends Contract {
       );
     }
     const iterator = await ctx.stub.getHistoryForKey(productId);
-    const events = [];
-    let prevOwner = null;
-    let firstSeen = true;
 
     // GetHistoryForKey: 一般に降順（新→旧）で返るので、一旦全部集めてから reverse
     const collected = [];
@@ -146,9 +151,10 @@ class ProductTraceContract extends Contract {
         break;
       }
     }
+    collected.reverse(); // 時系列昇順（旧→新）
 
-    // 時系列昇順（旧→新）に並べ直す
-    collected.reverse();
+    const events = [];
+    let prevOwner = null;
 
     for (const km of collected) {
       if (km.isDelete) continue;
@@ -166,25 +172,31 @@ class ProductTraceContract extends Contract {
           ).toISOString()
         : null;
 
-      if (firstSeen) {
+      // 各スナップショット時点の lastActor を採用。
+      // 旧データ互換: lastActor 未記録のエントリは MSPID フォールバック。
+      const actor = product.lastActor
+        ? product.lastActor
+        : { mspId: product.manufacturer, id: null };
+
+      // events.length === 0 で CREATE 判定（先頭 isDelete 耐性）
+      if (events.length === 0) {
         events.push({
           eventType: 'CREATE',
           productId: product.productId,
           fromOwner: null,
           toOwner: product.currentOwner,
-          actor: product.manufacturer,
+          actor,
           txId: km.txId,
           timestamp: tsIso,
         });
         prevOwner = product.currentOwner;
-        firstSeen = false;
       } else if (product.currentOwner !== prevOwner) {
         events.push({
           eventType: 'TRANSFER',
           productId: product.productId,
           fromOwner: prevOwner,
           toOwner: product.currentOwner,
-          actor: prevOwner,
+          actor,
           txId: km.txId,
           timestamp: tsIso,
         });

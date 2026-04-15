@@ -1,8 +1,12 @@
 'use strict';
 
+// message 先頭に [CODE] プレフィックスを付与する。
+// chaincode error は endorsement response では message 本文しか乗らないため、
+// クライアント側（invoke_as.sh / test_integration.sh など）で grep しやすいよう
+// コード情報を message に埋め込んでおく。
 class ChaincodeError extends Error {
   constructor(code, message) {
-    super(message);
+    super(`[${code}] ${message}`);
     this.name = 'ChaincodeError';
     this.code = code;
   }

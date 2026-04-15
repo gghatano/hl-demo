@@ -15,7 +15,7 @@ describe('CreateProduct', () => {
   });
 
   it('creates a new product when called by Org1MSP with matching manufacturer/initialOwner', async () => {
-    const ctx = createMockContext({ mspId: 'Org1MSP', txTimestampISO: '2026-04-15T10:00:00.000Z' });
+    const ctx = createMockContext({ mspId: 'Org1MSP', identityId: 'x509::CN=Admin@org1', txTimestampISO: '2026-04-15T10:00:00.000Z' });
     const result = await contract.CreateProduct(ctx, 'X001', 'Org1MSP', 'Org1MSP');
     const product = JSON.parse(result);
     expect(product).to.include({
@@ -26,10 +26,24 @@ describe('CreateProduct', () => {
       createdAt: '2026-04-15T10:00:00.000Z',
       updatedAt: '2026-04-15T10:00:00.000Z',
     });
+    expect(product.lastActor).to.deep.equal({ mspId: 'Org1MSP', id: 'x509::CN=Admin@org1' });
     // putState invoked
     const stored = ctx.stub._store.get('X001');
     expect(stored).to.not.be.undefined;
     expect(JSON.parse(stored.toString()).productId).to.equal('X001');
+  });
+
+  it('accepts non-ASCII productId', async () => {
+    const ctx = createMockContext({ mspId: 'Org1MSP' });
+    const result = await contract.CreateProduct(ctx, '製品-一号-🎁', 'Org1MSP', 'Org1MSP');
+    expect(JSON.parse(result).productId).to.equal('製品-一号-🎁');
+  });
+
+  it('accepts long productId (256 chars)', async () => {
+    const ctx = createMockContext({ mspId: 'Org1MSP' });
+    const longId = 'X'.repeat(256);
+    const result = await contract.CreateProduct(ctx, longId, 'Org1MSP', 'Org1MSP');
+    expect(JSON.parse(result).productId).to.equal(longId);
   });
 
   it('rejects when called by non-Org1MSP', async () => {
