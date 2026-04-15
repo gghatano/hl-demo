@@ -8,6 +8,12 @@ set -euo pipefail
 # ===== 設定 =====
 CHANNEL_NAME="${CHANNEL_NAME:-supplychannel}"
 
+# test-network が使うポート（orderer=7050, Org1 peer=7051, Org2 peer=9051, Org3 peer=11051）
+FABRIC_PORTS=(7050 7051 9051 11051)
+
+# 期待稼働数: orderer 1 + peer 3 + CA 4 (org1/org2/org3/orderer) = 8
+EXPECTED_CONTAINERS=8
+
 # ===== パス =====
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -69,13 +75,27 @@ preflight() {
     exit 1
   fi
 
-  # 既存コンテナ検出
+  # 既存コンテナ検出（peer/orderer/dev-peer 含む）
   local running
-  running="$(docker ps --format '{{.Names}}' | grep -E '^(peer|orderer)' || true)"
+  running="$(docker ps --format '{{.Names}}' | grep -E '^(peer|orderer|dev-peer)' || true)"
   if [[ -n "${running}" ]]; then
     err "既存の Fabric コンテナが稼働中:"
     echo "${running}" | sed 's/^/    /' >&2
     err "scripts/reset.sh を実行してからやり直してください"
+    exit 1
+  fi
+
+  # ポート衝突検出
+  local busy=()
+  for port in "${FABRIC_PORTS[@]}"; do
+    if (exec 3<>"/dev/tcp/127.0.0.1/${port}") 2>/dev/null; then
+      exec 3<&- 3>&-
+      busy+=("${port}")
+    fi
+  done
+  if [[ ${#busy[@]} -gt 0 ]]; then
+    err "Fabric が使うポートが既に使用されている: ${busy[*]}"
+    err "他プロセスを停止してからやり直してください"
     exit 1
   fi
 }
@@ -99,6 +119,44 @@ verify() {
   log "==== 検証 ===="
   log "稼働中コンテナ:"
   docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -E '^(NAMES|peer|orderer|ca_)' | sed 's/^/  /'
+
+  # 期待数アサート（peer 3 + orderer 1 + CA 3 = 7）
+  local actual
+  actual="$(docker ps --format '{{.Names}}' | grep -Ec '^(peer[0-9]+\.org[0-9]+|orderer|ca_org[0-9]+|ca_orderer)' || true)"
+  if [[ "${actual}" -ne "${EXPECTED_CONTAINERS}" ]]; then
+    err "稼働コンテナ数が期待値と不一致: actual=${actual}, expected=${EXPECTED_CONTAINERS}"
+    err "peer3 + orderer1 + CA4 = 8 を期待"
+    exit 1
+  fi
+  ok "稼働コンテナ数: ${actual}/${EXPECTED_CONTAINERS}"
+
+  # Org3 視点 channel 疎通確認
+  log "==== Org3 視点 channel 疎通確認 ===="
+  local peer_bin="${SAMPLES_DIR}/bin/peer"
+  local org3_tls="${TEST_NET_DIR}/organizations/peerOrganizations/org3.example.com/peers/peer0.org3.example.com/tls/ca.crt"
+  local org3_msp="${TEST_NET_DIR}/organizations/peerOrganizations/org3.example.com/users/Admin@org3.example.com/msp"
+  if [[ ! -x "${peer_bin}" ]]; then
+    warn "peer binary 見つからず: ${peer_bin} → skip"
+  elif [[ ! -f "${org3_tls}" ]]; then
+    warn "Org3 TLS cert 見つからず: ${org3_tls} → skip"
+  elif [[ ! -d "${org3_msp}" ]]; then
+    warn "Org3 Admin MSP 見つからず: ${org3_msp} → skip"
+  else
+    local info
+    if info=$(FABRIC_CFG_PATH="${SAMPLES_DIR}/config" \
+              CORE_PEER_TLS_ENABLED=true \
+              CORE_PEER_LOCALMSPID=Org3MSP \
+              CORE_PEER_TLS_ROOTCERT_FILE="${org3_tls}" \
+              CORE_PEER_MSPCONFIGPATH="${org3_msp}" \
+              CORE_PEER_ADDRESS=localhost:11051 \
+              "${peer_bin}" channel getinfo -c "${CHANNEL_NAME}" 2>&1); then
+      ok "Org3 から ${CHANNEL_NAME} 参照成功"
+      echo "${info}" | sed 's/^/    /'
+    else
+      warn "Org3 視点 peer channel getinfo 失敗:"
+      echo "${info}" | sed 's/^/    /' >&2
+    fi
+  fi
 }
 
 main() {
@@ -112,5 +170,9 @@ main() {
   ok "Phase 2 network up 完了"
   echo "${C_DIM}次: Phase 3 Chaincode 実装 / Phase 4 deploy_chaincode.sh${C_OFF}"
   echo "${C_DIM}クリーンアップ: ./scripts/reset.sh${C_OFF}"
+  echo
+  echo "${C_DIM}[Phase 4 申し送り] chaincode deploy 時は endorsement policy を必ず明示:${C_OFF}"
+  echo "${C_DIM}  --signature-policy \"OR('Org1MSP.peer','Org2MSP.peer','Org3MSP.peer')\"${C_OFF}"
+  echo "${C_DIM}  default(majority) だと 3Org 化の意味が消える（fabric-pitfalls 参照）${C_OFF}"
 }
 main "$@"

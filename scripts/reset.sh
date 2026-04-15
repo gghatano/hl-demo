@@ -30,7 +30,7 @@ Fabric ネットワーク完全リセット:
   2. chaincode コンテナ (dev-peer*) 削除
   3. chaincode image (dev-peer*) 削除
   4. Fabric docker volume / network の残留削除
-  5. 生成物 (organizations/ / channel-artifacts/) は network.sh down 側で削除
+  5. 生成物 (organizations/ / channel-artifacts/ / addOrg3/fabric-ca/org3) 明示削除
 
 Options:
   --yes         確認プロンプトを省略
@@ -94,7 +94,7 @@ remove_leftover_volumes() {
   log "==== Fabric 残留 volume 削除 ===="
   local vols
   vols="$(docker volume ls --format '{{.Name}}' 2>/dev/null \
-            | grep -E '(orderer|peer|fabric_test|docker_)' || true)"
+            | grep -E '(orderer|peer|fabric_test|docker_|compose_)' || true)"
   if [[ -n "${vols}" ]]; then
     # shellcheck disable=SC2086
     docker volume rm ${vols} >/dev/null 2>&1 || true
@@ -108,7 +108,7 @@ remove_leftover_networks() {
   log "==== Fabric 残留 network 削除 ===="
   local nets
   nets="$(docker network ls --format '{{.Name}}' 2>/dev/null \
-            | grep -E '(fabric_test|docker_test)' || true)"
+            | grep -E '(fabric_test|docker_test|compose_test)' || true)"
   if [[ -n "${nets}" ]]; then
     # shellcheck disable=SC2086
     docker network rm ${nets} >/dev/null 2>&1 || true
@@ -116,6 +116,35 @@ remove_leftover_networks() {
   else
     ok "残留 network なし"
   fi
+}
+
+remove_leftover_artifacts() {
+  # 注意: organizations/ を丸ごと消してはいけない。
+  #       fabric-samples 付属スクリプト (ccp-generate.sh, cfssl/*, cryptogen/*,
+  #       fabric-ca/registerEnroll.sh 等) が同居しており、消すと network.sh up が壊れる。
+  #       削除対象は「実行時に生成される」サブディレクトリのみに限定する。
+  log "==== 生成物明示削除 ===="
+  local paths=(
+    "${TEST_NET_DIR}/organizations/peerOrganizations"
+    "${TEST_NET_DIR}/organizations/ordererOrganizations"
+    "${TEST_NET_DIR}/channel-artifacts"
+    "${TEST_NET_DIR}/addOrg3/channel-artifacts"
+    "${TEST_NET_DIR}/addOrg3/fabric-ca/org3/msp"
+    "${TEST_NET_DIR}/addOrg3/fabric-ca/org3/tls-cert.pem"
+    "${TEST_NET_DIR}/addOrg3/fabric-ca/org3/ca-cert.pem"
+    "${TEST_NET_DIR}/addOrg3/fabric-ca/org3/IssuerPublicKey"
+    "${TEST_NET_DIR}/addOrg3/fabric-ca/org3/IssuerRevocationPublicKey"
+    "${TEST_NET_DIR}/addOrg3/fabric-ca/org3/fabric-ca-server.db"
+  )
+  local removed=0
+  for p in "${paths[@]}"; do
+    if [[ -e "${p}" ]]; then
+      rm -rf "${p}"
+      log "  削除: ${p#${SAMPLES_DIR}/}"
+      removed=$((removed + 1))
+    fi
+  done
+  ok "生成物削除: ${removed} 件"
 }
 
 verify_clean() {
@@ -138,6 +167,7 @@ main() {
   remove_chaincode_images
   remove_leftover_volumes
   remove_leftover_networks
+  remove_leftover_artifacts
   verify_clean
   echo
   ok "Phase 2 reset 完了"
