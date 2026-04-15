@@ -191,14 +191,14 @@ updatedAt    : 2026-04-15T09:10:00.000Z
 **期待結果**:
 ```
 Error: endorsement failure during invoke.
-response: status:500 message:"[OWNER_MISMATCH] caller Org3MSP does not match fromOwner Org2MSP"
+response: status:500 message:"[OWNER_MISMATCH] fromOwner does not match currentOwner: from=Org2MSP, current=Org3MSP"
 ```
 
 **検証二段構え**:
 1. exit code ≠ 0、`[OWNER_MISMATCH]` エラーコードが付与されている
 2. 直後に `GetHistory X001` を再実行し、履歴に新規イベントが追加されていないこと
 
-**chaincode ロジック**: `ctx.clientIdentity.getMSPID()` と `fromOwner` を照合し、不一致なら `throw new Error('[OWNER_MISMATCH] ...')`。throw により endorsement failure となり block には載らない。
+**chaincode ロジック**: `TransferProduct` は (a) `product.currentOwner !== fromOwner` で `[OWNER_MISMATCH]`、(b) `ctx.clientIdentity.getMSPID() !== fromOwner` で `[MSP_NOT_AUTHORIZED]` を順に検査する。E1 は N フロー完了後 (currentOwner=Org3MSP) に C が `fromOwner=Org2MSP` と偽るため (a) が先に発火する。throw により endorsement failure となり block には載らない。
 
 ---
 
