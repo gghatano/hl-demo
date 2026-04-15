@@ -17,6 +17,7 @@ chaincode/product-trace/dist/
 organizations/
 channel-artifacts/
 *.tar.gz
+build/
 
 # ログ
 *.log
