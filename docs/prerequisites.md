@@ -1,8 +1,7 @@
 # 前提環境
 
-Phase 6 で README 統合予定。Phase 1 時点の暫定仕様。
-
 ## 動作環境
+
 - OS: Ubuntu 22.04 LTS（WSL2 可）
 - CPU: 2 core 以上
 - RAM: 8 GB 以上（WSL2 は `.wslconfig` で確保）
@@ -10,73 +9,102 @@ Phase 6 で README 統合予定。Phase 1 時点の暫定仕様。
 
 ## 必須ソフトウェア
 
-| ソフト | 推奨バージョン | 備考 |
+| ツール | バージョン | 備考 |
 |---|---|---|
-| Docker | 24.x 以上 | `docker --version` |
-| Docker Compose | v2.x | `docker compose version`（旧 `docker-compose` 非推奨） |
-| curl | 任意 | setup で使用 |
-| git | 2.30+ | fabric-samples clone |
-| jq | 1.6+ | 出力整形 / テスト assert |
-| bash | 5.x | スクリプト実行 |
-| Node.js | 18.x LTS | chaincode ビルド / テスト |
-| npm | 9+ | Node.js 18 同梱 |
-| iproute2 | 5.x+ | `ss` コマンド（ポート衝突検知） |
-| Go | 1.21+（任意） | Node.js chaincode 方針だが、fabric-samples 付属の Go サンプル利用時のみ |
+| Docker | **29+** | `docker compose v2` 必須 |
+| Node.js | 18 LTS | chaincode ビルド / L1 テスト |
+| jq | 1.6+ | スクリプト全般で JSON 整形に使用 |
+| git | 任意 | fabric-samples 取得に使用 |
+| bash | 5+ | `set -euo pipefail` 前提 |
+| curl | 任意 | setup.sh で使用 |
 
 ## Fabric バージョン（固定）
 
 | 項目 | バージョン |
 |---|---|
-| Fabric | 2.5.10 |
-| Fabric CA | 1.5.13 |
-| fabric-samples commit | `bf7e75c6c159dc1959f3bb8979ed739171673b4d` (main) |
+| Fabric | **2.5.15** |
+| Fabric CA | **1.5.18** |
+| fabric-samples commit | pin 済（`scripts/setup.sh` 先頭で定義） |
 
-注: fabric-samples は v2.4.9 以降 tag 運用が廃止されており、main ブランチの commit を固定する方針。
+> Docker 29+ との互換性のため Fabric 2.5.15 以上が必須。詳細は [`fabric-pitfalls.md`](fabric-pitfalls.md) 参照。
 
-変更時は `scripts/setup.sh` 先頭の変数 3 つを更新。最新 main commit 取得:
+## クリーン Ubuntu 22.04 からの導入コマンド例
+
 ```bash
-git ls-remote https://github.com/hyperledger/fabric-samples.git refs/heads/main
+# 基本ツール
+sudo apt-get update
+sudo apt-get install -y curl git jq ca-certificates gnupg lsb-release
+
+# Docker CE + compose v2（公式 apt repo）
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+  sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+  https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo usermod -aG docker "$USER"   # ← 再ログイン or `newgrp docker`
+
+# Node.js 18 LTS（NodeSource）
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# バージョン確認
+docker --version && docker compose version && node --version && jq --version
+```
+
+Docker 操作は **sudo 不要** にしておくこと:
+
+```bash
+sudo usermod -aG docker "$USER"   # → 再ログイン
+# または未反映シェルで一時的に:
+sg docker -c './scripts/network_up.sh'
 ```
 
 ## WSL2 注意
 
-`.wslconfig`（Windows ユーザーホーム直下）:
+`.wslconfig`（Windows ユーザーホーム直下 `%USERPROFILE%\.wslconfig`）:
+
 ```ini
 [wsl2]
 memory=8GB
 processors=4
 ```
+
 変更後 `wsl --shutdown` で再起動。
 
-### docker グループ加入（推奨・Phase 2 実運用で判明）
+### docker グループ加入（推奨）
+
 ```sh
 sudo usermod -aG docker $USER
 # 反映のため一度ログアウト → ログインし直す
 ```
+
 - 未加入だと `./scripts/reset.sh` / `./scripts/network_up.sh` を **sudo で実行せざるを得ない**
-- sudo 実行すると `fabric-samples/test-network/organizations/` が **root 所有** で生成され、
-  次回 git 操作が "Permission denied" で詰まる（`fabric-pitfalls.md` 参照）
-- 暫定復旧: `sudo chown -R $USER:$USER fabric-samples`
+- sudo 実行すると `fabric-samples/test-network/organizations/` が **root 所有** で生成され、次回 git 操作が "Permission denied" で詰まる（[`fabric-pitfalls.md`](fabric-pitfalls.md) 参照）
 
 ### WSL2 追加注意
+
 - **Docker Desktop 連携必須**: Linux 側直接 daemon を起動すると Windows 側 image と共有不可
 - **cgroup v2**: Ubuntu 22.04 WSL2 は v2 既定。Fabric 2.5 は対応済だが、古い Docker（<20.10）で v2 + chaincode 起動失敗事例あり
 - **iptables**: WSL2 で iptables-legacy / nftables 混在時 peer コンテナ間通信が詰まる事例。`update-alternatives --config iptables` で legacy 固定推奨
-
-## setup.sh 冪等性
-- 2 回目実行は既存 fabric-samples / bin を検知して skip（数秒で完了）
-- tag 不一致時は安全のため停止 → `./scripts/setup.sh --force` で再取得
 
 ## ポート使用
 
 | ポート | 用途 |
 |---|---|
 | 7050 | Orderer |
-| 7051 | peer0.orgA |
-| 9051 | peer0.orgB |
-| 11051 | peer0.orgC |
-| 7054 | CA orgA |
-| 8054 | CA orgB |
-| 9054 | CA orgC |
+| 7051 | peer0.org1 (メーカー A) |
+| 9051 | peer0.org2 (卸 B) |
+| 11051 | peer0.org3 (販売店 C) |
+| 7054 | CA org1 |
+| 8054 | CA org2 |
+| 9054 | CA org3 |
 
 他アプリで占有中の場合 `setup.sh` 冒頭で警告。
+
+## setup.sh 冪等性
+
+- 2 回目実行は既存 fabric-samples / bin を検知して skip（数秒で完了）
+- tag 不一致時は安全のため停止 → `./scripts/setup.sh --force` で再取得
