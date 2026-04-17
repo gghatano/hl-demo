@@ -13,6 +13,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+# fabric-samples が別ディレクトリにある場合は FABRIC_REPO_ROOT で上書き可能
+FABRIC_REPO_ROOT="${FABRIC_REPO_ROOT:-${REPO_ROOT}}"
+export FABRIC_REPO_ROOT
 WEB_DIR="${REPO_ROOT}/web"
 
 if [[ -t 1 ]]; then
@@ -52,9 +55,9 @@ fi
 ok "Fabric ネットワーク起動中"
 
 log "Preflight: Chaincode デプロイ確認..."
-PEER_BIN="${REPO_ROOT}/fabric/fabric-samples/bin/peer"
-export FABRIC_CFG_PATH="${REPO_ROOT}/fabric/fabric-samples/config"
-TEST_NET_DIR="${REPO_ROOT}/fabric/fabric-samples/test-network"
+PEER_BIN="${FABRIC_REPO_ROOT}/fabric/fabric-samples/bin/peer"
+export FABRIC_CFG_PATH="${FABRIC_REPO_ROOT}/fabric/fabric-samples/config"
+TEST_NET_DIR="${FABRIC_REPO_ROOT}/fabric/fabric-samples/test-network"
 ORG1_DIR="${TEST_NET_DIR}/organizations/peerOrganizations/org1.example.com"
 export CORE_PEER_TLS_ENABLED=true
 export CORE_PEER_LOCALMSPID="Org1MSP"

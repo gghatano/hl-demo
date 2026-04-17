@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000;
 const CHANNEL_NAME = process.env.CHANNEL_NAME || 'supplychannel';
 const CC_NAME = process.env.CC_NAME || 'product-trace';
 
-const REPO_ROOT = path.resolve(__dirname, '..');
+const REPO_ROOT = process.env.FABRIC_REPO_ROOT || path.resolve(__dirname, '..');
 const TEST_NET_DIR = path.join(REPO_ROOT, 'fabric', 'fabric-samples', 'test-network');
 const ORGS_DIR = path.join(TEST_NET_DIR, 'organizations', 'peerOrganizations');
 
@@ -95,6 +95,12 @@ async function getContract(orgName) {
   return network.getContract(CC_NAME);
 }
 
+// fabric-gateway returns Uint8Array; .toString() yields comma-separated bytes
+const utf8Decoder = new TextDecoder();
+function decodeResult(result) {
+  return utf8Decoder.decode(result);
+}
+
 // ---------------------------------------------------------------------------
 // Express App
 // ---------------------------------------------------------------------------
@@ -131,7 +137,7 @@ app.post('/api/products', resolveOrg, async (req, res) => {
     const contract = await getContract(req.org);
     const mspId = ORG_CONFIG[req.org].mspId;
     const result = await contract.submitTransaction('CreateProduct', productId, mspId, mspId);
-    res.json(JSON.parse(result.toString()));
+    res.json(JSON.parse(decodeResult(result)));
   } catch (err) {
     const msg = extractChaincodeError(err);
     res.status(400).json({ error: msg });
@@ -147,7 +153,7 @@ app.post('/api/products/:id/transfer', resolveOrg, async (req, res) => {
     const contract = await getContract(req.org);
     const fromOwner = ORG_CONFIG[req.org].mspId;
     const result = await contract.submitTransaction('TransferProduct', id, fromOwner, toOwner);
-    res.json(JSON.parse(result.toString()));
+    res.json(JSON.parse(decodeResult(result)));
   } catch (err) {
     const msg = extractChaincodeError(err);
     res.status(400).json({ error: msg });
@@ -159,7 +165,7 @@ app.get('/api/products/:id', resolveOrg, async (req, res) => {
   try {
     const contract = await getContract(req.org);
     const result = await contract.evaluateTransaction('ReadProduct', req.params.id);
-    res.json(JSON.parse(result.toString()));
+    res.json(JSON.parse(decodeResult(result)));
   } catch (err) {
     const msg = extractChaincodeError(err);
     res.status(404).json({ error: msg });
@@ -171,7 +177,7 @@ app.get('/api/products/:id/history', resolveOrg, async (req, res) => {
   try {
     const contract = await getContract(req.org);
     const result = await contract.evaluateTransaction('GetHistory', req.params.id);
-    res.json(JSON.parse(result.toString()));
+    res.json(JSON.parse(decodeResult(result)));
   } catch (err) {
     const msg = extractChaincodeError(err);
     res.status(404).json({ error: msg });
