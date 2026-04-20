@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HL-Proto Supply Chain Demo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Supply Chain Traceability Demo</h1>
+    <div class="org-selector">
+      <label for="orgSelect">操作組織:</label>
+      <select id="orgSelect">
+        <option value="org1">Org1MSP - メーカー A</option>
+        <option value="org2">Org2MSP - 卸 B</option>
+        <option value="org3">Org3MSP - 販売店 C</option>
+      </select>
+      <span id="orgBadge" class="badge org1">Org1MSP</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="panels">
+      <!-- 製品登録 -->
+      <section class="panel" id="panelCreate">
+        <h2>製品登録 (CreateProduct)</h2>
+        <p class="hint">メーカー A (Org1MSP) のみ実行可能</p>
+        <div class="form-row">
+          <label for="createProductId">製品 ID:</label>
+          <input type="text" id="createProductId" placeholder="例: X001">
+        </div>
+        <button id="btnCreate">登録</button>
+      </section>
+
+      <!-- 製品移転 -->
+      <section class="panel" id="panelTransfer">
+        <h2>製品移転 (TransferProduct)</h2>
+        <p class="hint">現在の所有者として操作。移転先を選択。</p>
+        <div class="form-row">
+          <label for="transferProductId">製品 ID:</label>
+          <input type="text" id="transferProductId" placeholder="例: X001">
+        </div>
+        <div class="form-row">
+          <label for="transferTo">移転先:</label>
+          <select id="transferTo">
+            <option value="Org1MSP">Org1MSP - メーカー A</option>
+            <option value="Org2MSP" selected>Org2MSP - 卸 B</option>
+            <option value="Org3MSP">Org3MSP - 販売店 C</option>
+          </select>
+        </div>
+        <button id="btnTransfer">移転</button>
+      </section>
+
+      <!-- 製品照会 -->
+      <section class="panel" id="panelRead">
+        <h2>製品照会 (ReadProduct)</h2>
+        <div class="form-row">
+          <label for="readProductId">製品 ID:</label>
+          <input type="text" id="readProductId" placeholder="例: X001">
+        </div>
+        <button id="btnRead">照会</button>
+      </section>
+
+      <!-- 履歴照会 -->
+      <section class="panel" id="panelHistory">
+        <h2>来歴照会 (GetHistory)</h2>
+        <p class="hint">製品の全履歴を時系列で表示</p>
+        <div class="form-row">
+          <label for="historyProductId">製品 ID:</label>
+          <input type="text" id="historyProductId" placeholder="例: X001">
+        </div>
+        <button id="btnHistory">来歴確認</button>
+      </section>
+    </div>
+
+    <!-- 結果表示 -->
+    <section id="resultSection">
+      <h2>結果</h2>
+      <div id="resultArea"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

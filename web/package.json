@@ -1,0 +1,18 @@
+{
+  "name": "hl-proto-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Web demo UI for hl-proto supply chain traceability",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.12.5",
+    "@hyperledger/fabric-gateway": "^1.7.1",
+    "express": "^4.21.2"
+  }
+}
