@@ -56,6 +56,8 @@ sequenceDiagram
 
 > 一括: `./scripts/demo_normal.sh --fresh` で reset → 起動 → デプロイ → デモまで連動。
 
+ブラウザ版デモ: `./scripts/web_demo.sh` → `http://localhost:3000` （組織切替・N1〜N4・E1〜E3 を GUI で実行）。手順は **[docs/web-demo-guide.md](docs/web-demo-guide.md)** 参照。
+
 クリーンアップ: `./scripts/reset.sh --yes`
 
 ## 前提環境
@@ -85,6 +87,7 @@ cd chaincode/product-trace && npm test
 | ドキュメント | 内容 |
 |---|---|
 | [docs/demo-scenarios.md](docs/demo-scenarios.md) | N1〜N4 / E1〜E3 詳細台本 + 期待出力 |
+| [docs/web-demo-guide.md](docs/web-demo-guide.md) | Web UI 版デモ手順 + REST API リファレンス |
 | [docs/architecture.md](docs/architecture.md) | 組織 / Peer / Channel / Chaincode 図解 |
 | [docs/prerequisites.md](docs/prerequisites.md) | 前提ソフトウェア + クリーン導入手順 |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | よくあるエラーと対処 |
