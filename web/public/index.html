@@ -3,18 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HL-Proto Supply Chain Demo</title>
+  <title>hl-proto v2 — 鋼材トレーサビリティ (5Org + 分割/接合)</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
 </head>
 <body>
   <header>
-    <h1>Supply Chain Traceability Demo</h1>
+    <h1>鋼材トレーサビリティ デモ (Phase 8 v2)</h1>
     <div class="org-selector">
       <label for="orgSelect">操作組織:</label>
       <select id="orgSelect">
-        <option value="org1">Org1MSP - メーカー A</option>
-        <option value="org2">Org2MSP - 卸 B</option>
-        <option value="org3">Org3MSP - 販売店 C</option>
+        <option value="org1">Org1MSP - 高炉メーカー A</option>
+        <option value="org2">Org2MSP - 電炉メーカー X</option>
+        <option value="org3">Org3MSP - 加工業者 B</option>
+        <option value="org4">Org4MSP - 加工業者 Y</option>
+        <option value="org5">Org5MSP - 建設会社 D</option>
       </select>
       <span id="orgBadge" class="badge org1">Org1MSP</span>
     </div>
@@ -24,53 +27,112 @@
     <div class="panels">
       <!-- 製品登録 -->
       <section class="panel" id="panelCreate">
-        <h2>製品登録 (CreateProduct)</h2>
-        <p class="hint">メーカー A (Org1MSP) のみ実行可能</p>
+        <h2>新規素材登録 (CreateProduct)</h2>
+        <p class="hint">高炉 A (Org1MSP) または 電炉 X (Org2MSP) のみ実行可能</p>
         <div class="form-row">
-          <label for="createProductId">製品 ID:</label>
-          <input type="text" id="createProductId" placeholder="例: X001">
+          <label for="createProductId">素材 ID:</label>
+          <input type="text" id="createProductId" placeholder="例: S1">
+        </div>
+        <div class="form-row">
+          <label for="createMetadata">metadata (JSON):</label>
+          <input type="text" id="createMetadata" placeholder='{"grade":"SS400","weightKg":10000}'>
+        </div>
+        <div class="form-row">
+          <label for="createMillSheetFile">ミルシート PDF:</label>
+          <input type="file" id="createMillSheetFile" accept="application/pdf,.pdf">
+          <span id="createMillSheetHashLabel" class="hint"></span>
+        </div>
+        <div class="form-row">
+          <label for="createMillSheetURI">ミルシート URI:</label>
+          <input type="text" id="createMillSheetURI" placeholder="https://example.com/mill/S1.pdf">
         </div>
         <button id="btnCreate">登録</button>
       </section>
 
       <!-- 製品移転 -->
       <section class="panel" id="panelTransfer">
-        <h2>製品移転 (TransferProduct)</h2>
-        <p class="hint">現在の所有者として操作。移転先を選択。</p>
+        <h2>譲渡 (TransferProduct)</h2>
+        <p class="hint">現在の所有者として操作 (currentOwner == caller MSP が必須)</p>
         <div class="form-row">
-          <label for="transferProductId">製品 ID:</label>
-          <input type="text" id="transferProductId" placeholder="例: X001">
+          <label for="transferProductId">素材 ID:</label>
+          <input type="text" id="transferProductId" placeholder="例: S1">
         </div>
         <div class="form-row">
-          <label for="transferTo">移転先:</label>
+          <label for="transferTo">譲渡先:</label>
           <select id="transferTo">
-            <option value="Org1MSP">Org1MSP - メーカー A</option>
-            <option value="Org2MSP" selected>Org2MSP - 卸 B</option>
-            <option value="Org3MSP">Org3MSP - 販売店 C</option>
+            <option value="Org1MSP">Org1MSP - 高炉メーカー A</option>
+            <option value="Org2MSP">Org2MSP - 電炉メーカー X</option>
+            <option value="Org3MSP" selected>Org3MSP - 加工業者 B</option>
+            <option value="Org4MSP">Org4MSP - 加工業者 Y</option>
+            <option value="Org5MSP">Org5MSP - 建設会社 D</option>
           </select>
         </div>
-        <button id="btnTransfer">移転</button>
+        <button id="btnTransfer">譲渡</button>
       </section>
 
-      <!-- 製品照会 -->
-      <section class="panel" id="panelRead">
-        <h2>製品照会 (ReadProduct)</h2>
+      <!-- 分割 -->
+      <section class="panel" id="panelSplit">
+        <h2>分割 (SplitProduct)</h2>
+        <p class="hint">親の現所有者として、N ≥ 2 の子に分割。親は CONSUMED。</p>
         <div class="form-row">
-          <label for="readProductId">製品 ID:</label>
-          <input type="text" id="readProductId" placeholder="例: X001">
+          <label for="splitParentId">親 ID:</label>
+          <input type="text" id="splitParentId" placeholder="例: S1">
+        </div>
+        <div id="splitChildren"></div>
+        <button id="btnAddSplitChild" class="btn-secondary">+ 子を追加</button>
+        <button id="btnSplit">分割実行</button>
+      </section>
+
+      <!-- 接合 -->
+      <section class="panel" id="panelMerge">
+        <h2>接合 (MergeProducts)</h2>
+        <p class="hint">全親の現所有者 == caller である必要あり (事前 Transfer で集約)</p>
+        <div class="form-row">
+          <label>親 ID (複数):</label>
+          <div id="mergeParents"></div>
+          <button id="btnAddMergeParent" class="btn-secondary">+ 親を追加</button>
+        </div>
+        <div class="form-row">
+          <label for="mergeChildId">子 ID:</label>
+          <input type="text" id="mergeChildId" placeholder="例: P1">
+        </div>
+        <div class="form-row">
+          <label for="mergeMetadata">metadata (JSON):</label>
+          <input type="text" id="mergeMetadata" placeholder='{"type":"welded"}'>
+        </div>
+        <button id="btnMerge">接合実行</button>
+      </section>
+
+      <!-- 素材照会 -->
+      <section class="panel" id="panelRead">
+        <h2>素材照会 (ReadProduct)</h2>
+        <div class="form-row">
+          <label for="readProductId">素材 ID:</label>
+          <input type="text" id="readProductId" placeholder="例: P1">
         </div>
         <button id="btnRead">照会</button>
       </section>
 
       <!-- 履歴照会 -->
       <section class="panel" id="panelHistory">
-        <h2>来歴照会 (GetHistory)</h2>
-        <p class="hint">製品の全履歴を時系列で表示</p>
+        <h2>履歴 (GetHistory)</h2>
+        <p class="hint">CREATE / TRANSFER / SPLIT / MERGE / SPLIT_FROM / MERGE_FROM を時系列で</p>
         <div class="form-row">
-          <label for="historyProductId">製品 ID:</label>
-          <input type="text" id="historyProductId" placeholder="例: X001">
+          <label for="historyProductId">素材 ID:</label>
+          <input type="text" id="historyProductId" placeholder="例: P1">
         </div>
-        <button id="btnHistory">来歴確認</button>
+        <button id="btnHistory">履歴確認</button>
+      </section>
+
+      <!-- 系譜 DAG -->
+      <section class="panel" id="panelLineage">
+        <h2>系譜 DAG (GetLineage)</h2>
+        <p class="hint">任意の素材から祖先方向の DAG を Mermaid で表示</p>
+        <div class="form-row">
+          <label for="lineageProductId">素材 ID:</label>
+          <input type="text" id="lineageProductId" placeholder="例: P1">
+        </div>
+        <button id="btnLineage">系譜表示</button>
       </section>
     </div>
 

@@ -20,15 +20,17 @@ else
   FMT_CYAN=""; FMT_MAGENTA=""; FMT_OFF=""
 fi
 
-# MSP ID → 業務語彙
-# 対応: Org1MSP=メーカー A / Org2MSP=卸 B / Org3MSP=販売店 C
+# MSP ID → 業務語彙 (Phase 8: 5Org)
+# Org1=高炉 A / Org2=電炉 X / Org3=加工 B / Org4=加工 Y / Org5=建設 D
 msp_to_role() {
   case "${1:-}" in
-    Org1MSP) printf 'メーカー A' ;;
-    Org2MSP) printf '卸 B'       ;;
-    Org3MSP) printf '販売店 C'    ;;
-    '')      printf '-'           ;;
-    *)       printf '%s' "$1"     ;;
+    Org1MSP) printf '高炉メーカー A' ;;
+    Org2MSP) printf '電炉メーカー X' ;;
+    Org3MSP) printf '加工業者 B'     ;;
+    Org4MSP) printf '加工業者 Y'     ;;
+    Org5MSP) printf '建設会社 D'     ;;
+    '')      printf '-'              ;;
+    *)       printf '%s' "$1"        ;;
   esac
 }
 

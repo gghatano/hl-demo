@@ -1,9 +1,11 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --org1: #2563eb;
-  --org2: #16a34a;
-  --org3: #ea580c;
+  --org1: #2563eb;  /* 高炉 A */
+  --org2: #0ea5e9;  /* 電炉 X */
+  --org3: #ea580c;  /* 加工 B */
+  --org4: #a855f7;  /* 加工 Y */
+  --org5: #16a34a;  /* 建設 D */
   --bg: #f8fafc;
   --card: #ffffff;
   --border: #e2e8f0;
@@ -60,6 +62,8 @@ header h1 {
 .badge.org1 { background: var(--org1); }
 .badge.org2 { background: var(--org2); }
 .badge.org3 { background: var(--org3); }
+.badge.org4 { background: var(--org4); }
+.badge.org5 { background: var(--org5); }
 
 main { padding: 24px; max-width: 1200px; margin: 0 auto; }
 
@@ -126,6 +130,83 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 body.org1 button { background: var(--org1); }
 body.org2 button { background: var(--org2); }
 body.org3 button { background: var(--org3); }
+body.org4 button { background: var(--org4); }
+body.org5 button { background: var(--org5); }
+
+/* secondary action */
+button.btn-secondary {
+  background: #94a3b8 !important;
+  margin-bottom: 10px;
+}
+button.btn-remove {
+  width: auto;
+  background: #ef4444;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+}
+
+.child-row, .parent-row {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr 2fr auto;
+  gap: 6px;
+  margin-bottom: 6px;
+  align-items: center;
+  font-size: 0.85rem;
+}
+.parent-row { grid-template-columns: 1fr auto; }
+.child-label { font-weight: 600; color: var(--text-light); }
+.child-row input, .child-row select,
+.parent-row input {
+  padding: 4px 8px !important;
+  font-size: 0.85rem !important;
+}
+
+/* Product card */
+.product-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin: 10px 0;
+  font-family: -apple-system, sans-serif;
+  font-size: 0.9rem;
+}
+.product-card div { margin-bottom: 4px; }
+.product-card code {
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 0.8rem;
+}
+.status-ACTIVE { color: #16a34a; font-weight: 700; }
+.status-CONSUMED { color: #ef4444; font-weight: 700; }
+
+/* Lineage Mermaid container */
+.mermaid-container {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin: 10px 0;
+  text-align: center;
+  overflow-x: auto;
+}
+.lineage-meta {
+  font-size: 0.85rem;
+  color: var(--text-light);
+  margin: 8px 0;
+}
+details {
+  margin-top: 10px;
+  font-family: -apple-system, sans-serif;
+}
+details summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 6px 0;
+}
 
 #resultSection {
   background: var(--card);
@@ -196,6 +277,10 @@ body.org3 button { background: var(--org3); }
 }
 .timeline li.event-CREATE::before { background: var(--org1); }
 .timeline li.event-TRANSFER::before { background: var(--org2); }
+.timeline li.event-SPLIT::before { background: var(--org3); }
+.timeline li.event-MERGE::before { background: var(--org4); }
+.timeline li.event-SPLIT_FROM::before { background: var(--org3); border-style: dashed; }
+.timeline li.event-MERGE_FROM::before { background: var(--org4); border-style: dashed; }
 
 .timeline .event-type {
   font-weight: 700;
@@ -225,6 +310,8 @@ body.org3 button { background: var(--org3); }
 .flow-node.Org1MSP { background: var(--org1); }
 .flow-node.Org2MSP { background: var(--org2); }
 .flow-node.Org3MSP { background: var(--org3); }
+.flow-node.Org4MSP { background: var(--org4); }
+.flow-node.Org5MSP { background: var(--org5); }
 .flow-arrow { font-size: 1.2rem; color: var(--text-light); }
 
 .verify-result {
