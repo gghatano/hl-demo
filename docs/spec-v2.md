@@ -190,8 +190,8 @@ orderer: 7050 (v1 と同じ)。
 - `PRODUCT_NOT_FOUND`: parent 不在
 - `PARENT_NOT_ACTIVE`: parent が CONSUMED
 - `MSP_NOT_AUTHORIZED`: caller ≠ parent.currentOwner
-- `INVALID_ARGUMENT`: children 空 / toOwner が 5 Org 外
-- `CHILD_ALREADY_EXISTS`: childId が state に既存 or children 内重複
+- `INVALID_ARGUMENT`: children 2 件未満 / toOwner が 5 Org 外 / 各 spec が object でない
+- `CHILD_ALREADY_EXISTS`: childId が state に既存 or children 内重複 or childId==parentId
 
 **副作用**:
 - parent を `status=CONSUMED`, `children=[...childIds].sort()` に更新
@@ -209,7 +209,10 @@ orderer: 7050 (v1 と同じ)。
 
 **シグネチャ**: `MergeProducts(parentIdsJson, childJson) -> { parents: Product[], child: Product }`
 
-`parentIdsJson`: `["S1-a","S2"]` の形式。**最小 2 件**。
+`parentIdsJson`: `["S1-a","S2"]` の形式。**最小 2 件** (1 件接合は無意味)。
+
+※ Split も同様に **子 2 件以上** を要求。1→1 の変換は `TransferProduct` で表現する (状態継続) か、別途 Split→Merge で表現する。
+この制約により、GetHistory の `SPLIT` / `MERGE` イベント区別を親の `children.length` のみで確定できる。
 `childJson`:
 ```json
 {

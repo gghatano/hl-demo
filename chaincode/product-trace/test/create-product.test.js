@@ -60,11 +60,11 @@ describe('CreateProduct', () => {
     ).to.be.rejectedWith(/initialOwner must equal manufacturer/);
   });
 
-  it('rejects when manufacturer !== Org1MSP', async () => {
+  it('rejects when manufacturer does not match caller MSP (Org1MSP caller, Org2MSP claim)', async () => {
     const ctx = createMockContext({ mspId: 'Org1MSP' });
     await expect(
       contract.CreateProduct(ctx, 'X001', 'Org2MSP', 'Org2MSP')
-    ).to.be.rejectedWith(/manufacturer must be Org1MSP/);
+    ).to.be.rejectedWith(/MSP_NOT_AUTHORIZED|manufacturer must match caller/);
   });
 
   it('rejects duplicate productId', async () => {
