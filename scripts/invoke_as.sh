@@ -12,8 +12,8 @@
 #   ./invoke_as.sh org1 query  GetHistory X001
 #
 # 仕様:
-#   - invoke 時は 3Org すべての peer を --peerAddresses で target し endorsement policy
-#     OR('Org1MSP.peer','Org2MSP.peer','Org3MSP.peer') を充足
+#   - invoke 時は 5Org すべての peer を --peerAddresses で target し endorsement policy
+#     OR('Org1MSP.peer',...,'Org5MSP.peer') を充足
 #   - query は呼出元 Org の peer 単体
 #   - FABRIC_CFG_PATH=<samples>/config を必ず export
 
@@ -47,7 +47,14 @@ Usage:
   $(basename "$0") <org> <invoke|query> <fn> [args...]
   $(basename "$0") <org> <fn> [args...]        # invoke 省略時 invoke
 
-org:  org1 | org2 | org3
+org:  org1 | org2 | org3 | org4 | org5
+
+役割 (Phase 8 業務対応):
+  org1 = 高炉メーカー A   (Org1MSP)
+  org2 = 電炉メーカー X   (Org2MSP)
+  org3 = 加工業者 B       (Org3MSP)
+  org4 = 加工業者 Y       (Org4MSP)
+  org5 = 建設会社 D       (Org5MSP)
 EOF
 }
 
@@ -78,8 +85,22 @@ case "${ORG_RAW}" in
   org1|1) ORG_N=1 ;;
   org2|2) ORG_N=2 ;;
   org3|3) ORG_N=3 ;;
-  *) err "invalid org: ${ORG_RAW} (org1|org2|org3)"; exit 2 ;;
+  org4|4) ORG_N=4 ;;
+  org5|5) ORG_N=5 ;;
+  *) err "invalid org: ${ORG_RAW} (org1|org2|org3|org4|org5)"; exit 2 ;;
 esac
+
+# ORG_N → peer port マップ
+org_port() {
+  case "$1" in
+    1) echo 7051  ;;
+    2) echo 9051  ;;
+    3) echo 11051 ;;
+    4) echo 13051 ;;
+    5) echo 15051 ;;
+    *) echo ""; return 1 ;;
+  esac
+}
 
 set_org_env() {
   local n="$1"
@@ -88,23 +109,15 @@ set_org_env() {
   export CORE_PEER_LOCALMSPID="Org${n}MSP"
   export CORE_PEER_TLS_ROOTCERT_FILE="${org_dir}/peers/peer0.org${n}.example.com/tls/ca.crt"
   export CORE_PEER_MSPCONFIGPATH="${org_dir}/users/Admin@org${n}.example.com/msp"
-  case "$n" in
-    1) export CORE_PEER_ADDRESS=localhost:7051  ;;
-    2) export CORE_PEER_ADDRESS=localhost:9051  ;;
-    3) export CORE_PEER_ADDRESS=localhost:11051 ;;
-  esac
+  export CORE_PEER_ADDRESS="localhost:$(org_port "$n")"
 }
 
 peer_tls_args() {
   local n="$1"
   local tls="${TEST_NET_DIR}/organizations/peerOrganizations/org${n}.example.com/peers/peer0.org${n}.example.com/tls/ca.crt"
-  local host="localhost" port
-  case "$n" in
-    1) port=7051  ;;
-    2) port=9051  ;;
-    3) port=11051 ;;
-  esac
-  printf -- '--peerAddresses %s:%s --tlsRootCertFiles %s' "$host" "$port" "$tls"
+  local port
+  port="$(org_port "$n")"
+  printf -- '--peerAddresses localhost:%s --tlsRootCertFiles %s' "$port" "$tls"
 }
 
 # 標準形 ctor: {"Args":["fn","arg1","arg2",...]}
@@ -139,6 +152,8 @@ else
     $(peer_tls_args 1) \
     $(peer_tls_args 2) \
     $(peer_tls_args 3) \
+    $(peer_tls_args 4) \
+    $(peer_tls_args 5) \
     -c "${CTOR}" \
     --waitForEvent
 fi

@@ -1,5 +1,6 @@
 # Fabric 取得物（setup.sh で clone / download）
 fabric/fabric-samples/
+fabric/fabric-samples
 fabric/install-fabric.sh
 
 # 環境変数 / シークレット
@@ -9,6 +10,7 @@ fabric/install-fabric.sh
 
 # Node
 node_modules/
+node_modules
 npm-debug.log*
 package-lock.json.bak
 

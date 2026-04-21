@@ -25,12 +25,13 @@ usage() {
   cat <<EOF
 Usage: $(basename "$0") [options]
 
-Fabric ネットワーク完全リセット:
+Fabric ネットワーク完全リセット (5Org 対応):
   1. test-network の network.sh down
   2. chaincode コンテナ (dev-peer*) 削除
   3. chaincode image (dev-peer*) 削除
   4. Fabric docker volume / network の残留削除
-  5. 生成物 (organizations/ / channel-artifacts/ / addOrg3/fabric-ca/org3) 明示削除
+  5. 生成物 (organizations/ / channel-artifacts/) 明示削除
+     addOrg3/fabric-ca 残留 + addOrg4/addOrg5 ディレクトリ自体 (patches コピー)
 
 Options:
   --yes         確認プロンプトを省略
@@ -131,13 +132,27 @@ remove_leftover_artifacts() {
     "${TEST_NET_DIR}/organizations/peerOrganizations"
     "${TEST_NET_DIR}/organizations/ordererOrganizations"
     "${TEST_NET_DIR}/channel-artifacts"
-    "${TEST_NET_DIR}/addOrg3/channel-artifacts"
-    "${TEST_NET_DIR}/addOrg3/fabric-ca/org3/msp"
-    "${TEST_NET_DIR}/addOrg3/fabric-ca/org3/tls-cert.pem"
-    "${TEST_NET_DIR}/addOrg3/fabric-ca/org3/ca-cert.pem"
-    "${TEST_NET_DIR}/addOrg3/fabric-ca/org3/IssuerPublicKey"
-    "${TEST_NET_DIR}/addOrg3/fabric-ca/org3/IssuerRevocationPublicKey"
-    "${TEST_NET_DIR}/addOrg3/fabric-ca/org3/fabric-ca-server.db"
+  )
+  # addOrg3/4/5 の channel-artifacts + fabric-ca 残留
+  local n
+  for n in 3 4 5; do
+    paths+=(
+      "${TEST_NET_DIR}/addOrg${n}/channel-artifacts"
+      "${TEST_NET_DIR}/addOrg${n}/fabric-ca/org${n}/msp"
+      "${TEST_NET_DIR}/addOrg${n}/fabric-ca/org${n}/tls-cert.pem"
+      "${TEST_NET_DIR}/addOrg${n}/fabric-ca/org${n}/ca-cert.pem"
+      "${TEST_NET_DIR}/addOrg${n}/fabric-ca/org${n}/IssuerPublicKey"
+      "${TEST_NET_DIR}/addOrg${n}/fabric-ca/org${n}/IssuerRevocationPublicKey"
+      "${TEST_NET_DIR}/addOrg${n}/fabric-ca/org${n}/fabric-ca-server.db"
+    )
+  done
+  # addOrg4/5 は patches からコピーされた「生成物」扱いで丸ごと削除可
+  # (addOrg3 は fabric-samples 付属なので削除不可)
+  paths+=(
+    "${TEST_NET_DIR}/addOrg4"
+    "${TEST_NET_DIR}/addOrg5"
+    "${TEST_NET_DIR}/scripts/org4-scripts"
+    "${TEST_NET_DIR}/scripts/org5-scripts"
   )
   local removed=0
   for p in "${paths[@]}"; do
