@@ -3,9 +3,10 @@
 Hyperledger Fabric サプライチェーン トレーサビリティ PoC。Claude Code 向け規約。
 
 ## プロジェクト概要
-- 目的: A→B→C の製品譲渡履歴を Fabric 台帳に記録、C 視点で A 起点確認
-- スコープ: ローカル Linux デモ、CLI ベース、3Org 構成
-- 詳細仕様: `docs/spec.md`
+- 目的 (v1): A→B→C の製品譲渡履歴を Fabric 台帳に記録、C 視点で A 起点確認
+- 目的 (v2 / Phase 8): 鋼材の分割 (1→N) / 接合 (N→1) を扱う 5Org 構成。建設 D が系譜 DAG で起点メーカーを検証
+- スコープ: ローカル Linux (WSL2) / macOS (Colima) デモ、CLI + Web UI
+- 詳細仕様: **`docs/spec-v2.md` (現行)** / `docs/spec.md` (v1 凍結)
 - 開発タスク: `docs/tasks/README.md`
 - テスト戦略: `docs/tasks/test-strategy.md`
 
@@ -55,15 +56,21 @@ hl-proto/
 - エラーは `throw new Error(...)` → endorsement failure で伝搬
 - 詳細: `docs/fabric-pitfalls.md`
 
-### Endorsement Policy
-- 3Org `OR` ポリシー明示必須:
-  - `OR('Org1MSP.peer','Org2MSP.peer','Org3MSP.peer')`
-- invoke 時 `--peerAddresses` を endorsement policy に合致させる
+### Endorsement Policy (v2)
+- 5Org `OR` ポリシー明示必須:
+  - `OR('Org1MSP.peer','Org2MSP.peer','Org3MSP.peer','Org4MSP.peer','Org5MSP.peer')`
+- invoke 時 `--peerAddresses` を endorsement policy に合致させる (2 peer 以上)
+- v1 時代は 3Org OR。v2 以降は 5Org OR。
 
-### MSP ID の扱い（Issue #1 決定事項）
-- 内部 MSP ID は fabric-samples 標準の `Org1MSP` / `Org2MSP` / `Org3MSP` をそのまま使用
-- 業務語彙（メーカー A / 卸 B / 販売店 C）への変換は T5-3 出力整形層で行う
-- 対応関係: `Org1MSP` = メーカー A / `Org2MSP` = 卸 B / `Org3MSP` = 販売店 C
+### MSP ID の扱い
+- 内部 MSP ID は fabric-samples 標準の `Org1MSP`〜`Org5MSP`
+- 業務語彙への変換は `scripts/lib/format.sh` の `msp_to_role` + Web UI の MSP_LABELS
+- 対応関係 (v2):
+  - `Org1MSP` = 高炉メーカー A (CreateProduct 権限)
+  - `Org2MSP` = 電炉メーカー X (CreateProduct 権限)
+  - `Org3MSP` = 加工業者 B    (Split/Merge)
+  - `Org4MSP` = 加工業者 Y    (Split/Merge)
+  - `Org5MSP` = 建設会社 D
 
 ### スクリプト規約
 - bash 全て `set -euo pipefail`
@@ -115,8 +122,9 @@ Phase とエージェントの対応:
 セッション開始時 ユーザーが `/genshijin` 指定している。解除指示あるまで継続。コード / コミットメッセージ / PR は通常記述。
 
 ## 禁止事項
-- `docs/spec.md` の無断変更（凍結）
+- `docs/spec.md` (v1) / `docs/spec-v2.md` (v2) の無断変更 (両方凍結。変更は Issue 経由)
 - `--no-verify` コミット
 - `docker system prune -af` 等 ユーザー確認なし破壊的操作
-- 3Org 化を test-network へ直接手入れ（patches/ 経由必須）
-- chaincode に非決定性 API 混入
+- test-network への直接手入れ (3Org は fabric-samples 付属、4/5Org は patches/ 経由必須)
+- chaincode に非決定性 API 混入 (Date.now(), Math.random(), process.env, 外部 HTTP)
+- parents/children 配列を非ソート状態で保存 (v2: normalizeIds() 必須)
