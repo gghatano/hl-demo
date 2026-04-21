@@ -308,6 +308,30 @@ body.org5 #btnCreate, body.org5 #btnTransfer, body.org5 #btnSplit, body.org5 #bt
 .pc-none { color: var(--text-dim); font-style: italic; }
 .pc-dim, .msp-dim, .event-dim { color: var(--text-dim); font-size: 0.78rem; }
 
+/* 「由来をたどる」ボタン (手持ち一覧のカード内) */
+.btn-lineage {
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px 14px;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-lineage:hover {
+  background: var(--bg);
+  border-color: var(--text-light);
+}
+body.org1 .btn-lineage:hover { border-color: var(--org1); color: var(--org1); }
+body.org2 .btn-lineage:hover { border-color: var(--org2); color: var(--org2); }
+body.org3 .btn-lineage:hover { border-color: var(--org3); color: var(--org3); }
+body.org4 .btn-lineage:hover { border-color: var(--org4); color: var(--org4); }
+body.org5 .btn-lineage:hover { border-color: var(--org5); color: var(--org5); }
+
 .org-badge {
   display: inline-block;
   padding: 2px 8px;

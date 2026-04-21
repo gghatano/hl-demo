@@ -69,8 +69,12 @@ function setLoading(container) {
   container.innerHTML = '<div class="loading">処理中…</div>';
 }
 
-function productCard(p) {
+function productCard(p, opts = {}) {
   const statusCls = `status-${p.status}`;
+  const { showLineageButton = false } = opts;
+  const lineageBtn = showLineageButton
+    ? `<button class="btn-lineage" data-product-id="${esc(p.productId)}">🔎 由来をたどる</button>`
+    : '';
   return `
     <div class="product-card">
       <div class="pc-header">
@@ -84,8 +88,22 @@ function productCard(p) {
       <div class="pc-row"><b>metadata</b>: <code>${esc(JSON.stringify(p.metadata || {}))}</code></div>
       ${p.millSheetURI ? `<div class="pc-row"><b>ミルシート</b>: <a href="${esc(p.millSheetURI)}" target="_blank">${esc(p.millSheetURI)}</a></div>` : ''}
       <div class="pc-row pc-dim">created: ${esc(p.createdAt)} / updated: ${esc(p.updatedAt)}</div>
+      ${lineageBtn}
     </div>
   `;
+}
+
+// 画面遷移: 手持ち一覧のカードから「由来をたどる」 → 素材を調べる view に遷移 + 自動検索
+function wireLineageButtons(container) {
+  container.querySelectorAll('.btn-lineage').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const pid = btn.dataset.productId;
+      searchProductId.value = pid;
+      showView('viewSearch');
+      runSearch();
+    });
+  });
 }
 
 // =============================================================================
@@ -156,15 +174,17 @@ async function refreshInventory() {
     const active = filtered.filter((p) => p.status === 'ACTIVE');
     const consumed = filtered.filter((p) => p.status === 'CONSUMED');
     let html = '';
+    const cardOpts = { showLineageButton: true };
     if (active.length > 0) {
       html += `<h3 class="group-title">使用可 (ACTIVE) ${active.length} 件</h3>`;
-      html += '<div class="product-grid">' + active.map(productCard).join('') + '</div>';
+      html += '<div class="product-grid">' + active.map((p) => productCard(p, cardOpts)).join('') + '</div>';
     }
     if (consumed.length > 0) {
       html += `<h3 class="group-title group-consumed">消費済 (CONSUMED) ${consumed.length} 件</h3>`;
-      html += '<div class="product-grid">' + consumed.map(productCard).join('') + '</div>';
+      html += '<div class="product-grid">' + consumed.map((p) => productCard(p, cardOpts)).join('') + '</div>';
     }
     inventoryList.innerHTML = html;
+    wireLineageButtons(inventoryList);
   } catch (e) {
     setError(inventoryList, `取得失敗: ${e.message}`);
   }
