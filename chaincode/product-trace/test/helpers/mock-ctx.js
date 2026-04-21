@@ -22,21 +22,22 @@ function makeTimestampNumeric(isoString) {
   };
 }
 
-function createMockContext({ mspId = 'Org1MSP', identityId = 'x509::CN=Admin@org1', txId = 'tx-1', txTimestampISO = '2026-04-15T10:00:00.000Z' } = {}) {
-  const store = new Map();
+function createMockContext({ mspId = 'Org1MSP', identityId = 'x509::CN=Admin@org1', txId = 'tx-1', txTimestampISO = '2026-04-15T10:00:00.000Z', store } = {}) {
+  // store は任意。未指定なら新規 Map。複数 ctx 間で state を共有したい場合は同じ Map を渡す。
+  const sharedStore = store || new Map();
 
   const stub = {
     getState: sinon.stub().callsFake(async (key) => {
-      if (!store.has(key)) return Buffer.from('');
-      return store.get(key);
+      if (!sharedStore.has(key)) return Buffer.from('');
+      return sharedStore.get(key);
     }),
     putState: sinon.stub().callsFake(async (key, value) => {
-      store.set(key, value);
+      sharedStore.set(key, value);
     }),
     getTxID: sinon.stub().returns(txId),
     getTxTimestamp: sinon.stub().returns(makeTimestampNumeric(txTimestampISO)),
     getHistoryForKey: sinon.stub(),
-    _store: store,
+    _store: sharedStore,
   };
 
   const clientIdentity = {
