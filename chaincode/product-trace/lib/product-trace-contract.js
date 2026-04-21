@@ -64,14 +64,17 @@ class ProductTraceContract extends Contract {
     super('ProductTraceContract');
   }
 
+  // fabric-contract-api は関数の Function.length を使って期待引数数を決めるため、
+  // デフォルト引数を付けると期待値が減って client は全引数を送る必要があるのに不一致となる。
+  // → 全引数を必須にし、クライアント側で空文字を明示的に送る規約にする。
   async CreateProduct(
     ctx,
     productId,
     manufacturer,
     initialOwner,
-    metadataJson = '',
-    millSheetHash = '',
-    millSheetURI = ''
+    metadataJson,
+    millSheetHash,
+    millSheetURI
   ) {
     if (!productId || !manufacturer || !initialOwner) {
       throw new ChaincodeError(

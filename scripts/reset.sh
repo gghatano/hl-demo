@@ -122,6 +122,45 @@ remove_leftover_networks() {
   fi
 }
 
+# root 所有の残骸を docker 経由で削除 (fabric-ca container が root で作る msp/*_sk 等)
+remove_root_owned_residue() {
+  log "==== root 所有残骸削除 (docker 経由) ===="
+  local targets=()
+  # addOrg4/5 の fabric-ca サブツリー
+  for n in 4 5; do
+    local p="${TEST_NET_DIR}/addOrg${n}"
+    if [[ -d "${p}" ]]; then targets+=("${p}"); fi
+  done
+  # organizations/ 配下 (fabric-ca/, peerOrganizations/, ordererOrganizations/)
+  if [[ -d "${TEST_NET_DIR}/organizations/peerOrganizations" ]]; then
+    targets+=("${TEST_NET_DIR}/organizations/peerOrganizations")
+  fi
+  if [[ -d "${TEST_NET_DIR}/organizations/ordererOrganizations" ]]; then
+    targets+=("${TEST_NET_DIR}/organizations/ordererOrganizations")
+  fi
+  # organizations/fabric-ca/ の org1,2,3 下の生成物 (msp, tls-cert 等) は root 所有
+  for org in org1 org2 org3 ordererOrg; do
+    local p="${TEST_NET_DIR}/organizations/fabric-ca/${org}/msp"
+    if [[ -d "${p}" ]]; then targets+=("${p}"); fi
+  done
+
+  if [[ ${#targets[@]} -gt 0 ]]; then
+    # コンテナ内 root として rm -rf
+    local vargs=()
+    for t in "${targets[@]}"; do
+      vargs+=(-v "${t}:/targets/$(basename "${t}")-$(echo "${t}" | sha256sum | cut -c1-8)")
+    done
+    docker run --rm "${vargs[@]}" alpine sh -c 'rm -rf /targets/*' >/dev/null 2>&1 || true
+    # 空になった各 target を rmdir 試行 (失敗許容)
+    for t in "${targets[@]}"; do
+      rmdir "${t}" 2>/dev/null || true
+    done
+    ok "root 所有残骸 削除試行: ${#targets[@]} 箇所"
+  else
+    ok "root 所有残骸なし"
+  fi
+}
+
 remove_leftover_artifacts() {
   # 注意: organizations/ を丸ごと消してはいけない。
   #       fabric-samples 付属スクリプト (ccp-generate.sh, cfssl/*, cryptogen/*,
@@ -185,6 +224,7 @@ main() {
   remove_chaincode_images
   remove_leftover_volumes
   remove_leftover_networks
+  remove_root_owned_residue
   remove_leftover_artifacts
   verify_clean
   echo

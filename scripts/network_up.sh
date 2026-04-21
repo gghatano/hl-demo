@@ -118,7 +118,21 @@ preflight() {
 # fabric-samples 側に addOrg4/5 と org4/5-scripts を配置する。
 # 既に存在する場合は冪等に上書き (既存生成物は reset.sh で掃除済前提)。
 apply_patches() {
-  log "==== patches 適用 (addOrg4/5, org4/5-scripts) ===="
+  log "==== patches 適用 (addOrg4/5, org4/5-scripts, envVar/setAnchorPeer 5Org 対応) ===="
+
+  # envVar.sh / setAnchorPeer.sh は fabric-samples 同梱の Org1-3 限定版を
+  # 5Org 対応版で上書きする。オリジナルは fabric-samples の git checkout で戻せる。
+  local core_scripts_src="${PATCHES_DIR}/scripts"
+  if [[ -f "${core_scripts_src}/envVar.sh" ]]; then
+    cp "${core_scripts_src}/envVar.sh" "${TEST_NET_DIR}/scripts/envVar.sh"
+    log "  envVar.sh → test-network/scripts/ (5Org 対応)"
+  fi
+  if [[ -f "${core_scripts_src}/setAnchorPeer.sh" ]]; then
+    cp "${core_scripts_src}/setAnchorPeer.sh" "${TEST_NET_DIR}/scripts/setAnchorPeer.sh"
+    chmod +x "${TEST_NET_DIR}/scripts/setAnchorPeer.sh"
+    log "  setAnchorPeer.sh → test-network/scripts/ (5Org 対応)"
+  fi
+
   local n
   for n in 4 5; do
     local src="${PATCHES_DIR}/addOrg${n}"

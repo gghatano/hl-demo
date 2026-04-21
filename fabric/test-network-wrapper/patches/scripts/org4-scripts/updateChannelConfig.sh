@@ -46,6 +46,10 @@ createConfigUpdate ${CHANNEL_NAME} ${TEST_NETWORK_HOME}/channel-artifacts/config
 
 infoln "Signing config transaction"
 signConfigtxAsPeerOrg 1 ${TEST_NETWORK_HOME}/channel-artifacts/org4_update_in_envelope.pb
+infoln "Additional signing by Org2 for MAJORITY policy"
+signConfigtxAsPeerOrg 2 ${TEST_NETWORK_HOME}/channel-artifacts/org4_update_in_envelope.pb
+infoln "Additional signing by Org3 for MAJORITY policy"
+signConfigtxAsPeerOrg 3 ${TEST_NETWORK_HOME}/channel-artifacts/org4_update_in_envelope.pb
 
 infoln "Submitting transaction from a different peer (peer0.org2) which also signs it"
 setGlobals 2

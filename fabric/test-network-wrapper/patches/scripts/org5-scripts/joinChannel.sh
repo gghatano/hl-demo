@@ -55,22 +55,33 @@ setAnchorPeer() {
   ${TEST_NETWORK_HOME}/scripts/setAnchorPeer.sh $ORG $CHANNEL_NAME
 }
 
-setGlobals 3
+setGlobals 5
 BLOCKFILE="${TEST_NETWORK_HOME}/channel-artifacts/${CHANNEL_NAME}.block"
 
-echo "Fetching channel config block from orderer..."
-set -x
-peer channel fetch 0 $BLOCKFILE -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com -c $CHANNEL_NAME --tls --cafile "$ORDERER_CA" >&log.txt
-res=$?
-{ set +x; } 2>/dev/null
+echo "Fetching channel config block from orderer (retry-aware)..."
+FETCH_RETRY=0
+FETCH_MAX=10
+FETCH_DELAY=2
+res=1
+while [ $res -ne 0 ] && [ $FETCH_RETRY -lt $FETCH_MAX ]; do
+  set -x
+  peer channel fetch 0 $BLOCKFILE -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com -c $CHANNEL_NAME --tls --cafile "$ORDERER_CA" >&log.txt
+  res=$?
+  { set +x; } 2>/dev/null
+  if [ $res -ne 0 ]; then
+    FETCH_RETRY=$((FETCH_RETRY+1))
+    echo "fetch failed (attempt $FETCH_RETRY/$FETCH_MAX, waiting for config propagation)"
+    sleep $FETCH_DELAY
+  fi
+done
 cat log.txt
-verifyResult $res "Fetching config block from orderer has failed"
+verifyResult $res "Fetching config block from orderer has failed after $FETCH_MAX attempts"
 
 infoln "Joining org5 peer to the channel..."
-joinChannel 3
+joinChannel 5
 
 infoln "Setting anchor peer for org5..."
-setAnchorPeer 3
+setAnchorPeer 5
 
 successln "Channel '$CHANNEL_NAME' joined"
 successln "Org5 peer successfully added to network"
