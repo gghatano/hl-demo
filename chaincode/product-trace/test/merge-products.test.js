@@ -92,18 +92,18 @@ describe('MergeProducts', () => {
       .to.be.rejectedWith(/PRODUCT_NOT_FOUND/);
   });
 
-  it('rejects when any parent is CONSUMED', async () => {
+  it('rejects when any parent is CONSUMED (previously merged)', async () => {
+    // CONSUMED になるのは Merge のみ (切り出しでは親 ACTIVE)。
+    // 前工程で merge して CONSUMED にした親を使って再 Merge を試みる。
     await seedMaterial('S1', 'Org1MSP', 'Org3MSP');
     await seedMaterial('S2', 'Org2MSP', 'Org3MSP');
     await seedMaterial('S3', 'Org1MSP', 'Org3MSP');
-    // consume S1 via split
-    const ctxSplit = createMockContext({ mspId: 'Org3MSP', store });
-    await contract.SplitProduct(ctxSplit, 'S1', JSON.stringify([
-      { childId: 'S1-a', toOwner: 'Org3MSP' },
-      { childId: 'S1-b', toOwner: 'Org3MSP' },
-    ]));
+    // 1st merge: [S1, S2] → P1. これで S1 と S2 は CONSUMED
+    const ctxFirst = createMockContext({ mspId: 'Org3MSP', store });
+    await contract.MergeProducts(ctxFirst, JSON.stringify(['S1', 'S2']), JSON.stringify({ childId: 'P1' }));
+    // 2nd merge: [S1(CONSUMED), S3] → 失敗すべき
     const ctx = createMockContext({ mspId: 'Org3MSP', store });
-    await expect(contract.MergeProducts(ctx, JSON.stringify(['S1', 'S2']), JSON.stringify({ childId: 'P1' })))
+    await expect(contract.MergeProducts(ctx, JSON.stringify(['S1', 'S3']), JSON.stringify({ childId: 'P2' })))
       .to.be.rejectedWith(/PARENT_NOT_ACTIVE/);
   });
 

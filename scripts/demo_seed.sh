@@ -5,16 +5,19 @@
 # 複数ロットが各組織に分散して保有されている現実的な在庫状態を作る。
 #
 # 投入結果 (最終状態):
-#   S-A-001   高炉A 鋼板 10t SS400   CONSUMED (B で 3 分割済)
-#   S-A-001-a 分割片 3t               CONSUMED (接合素材 → P-B-001)
-#   S-A-001-b 分割片 3t               ACTIVE   建設D 直送済
-#   S-A-001-c 分割片 4t               CONSUMED (接合素材 → P-B-002)
+#   S-A-001   高炉A 鋼板 10t SS400   ACTIVE   (3 片切り出し済、本体は加工B 在庫に残る)
+#   S-A-001-a 切り出し片 3t          CONSUMED (接合素材 → P-B-001)
+#   S-A-001-b 切り出し片 3t          ACTIVE   建設D 直送済
+#   S-A-001-c 切り出し片 4t          CONSUMED (接合素材 → P-B-002)
 #   S-A-002   高炉A 鋼板 8t SS400    ACTIVE   高炉A 在庫 (未出荷)
 #   S-X-001   電炉X 形鋼 2t SM490    CONSUMED (接合素材 → P-B-001)
 #   S-X-002   電炉X 形鋼 3t SM520    ACTIVE   加工Y 在庫 (未加工)
 #   S-X-003   電炉X 形鋼 0.8t SM490  CONSUMED (接合素材 → P-B-002)
 #   P-B-001   接合: S-A-001-a+S-X-001 ACTIVE   建設D 納品済 (柱)
 #   P-B-002   接合: S-A-001-c+S-X-003 ACTIVE   加工B 在庫 (梁)
+#
+# v1.3 以降の「切り出し」モデル: 親は CONSUMED にならず ACTIVE のまま残る。
+# 親の children[] に切り出した子 ID が cumulative に記録される。
 #
 # 再実行: 既存素材があれば skip するので冪等。
 
@@ -81,12 +84,20 @@ seed_split() {
   local status
   status="$(current_status "${parent}")"
   if [[ "${status}" == "CONSUMED" ]]; then
-    skip "Split ${parent} (CONSUMED)"
+    skip "Carve ${parent} (CONSUMED)"
     return 0
   fi
-  log "Split ${parent} → children (by ${owner_org})"
+  # 子 ID が既に全部存在していれば skip (冪等性)
+  # 単純化: 最初の子 ID で判定
+  local first_child
+  first_child="$(printf '%s' "${children_json}" | jq -r '.[0].childId // ""')"
+  if [[ -n "${first_child}" ]] && exists "${first_child}"; then
+    skip "Carve ${parent} (先頭子 ${first_child} 既存)"
+    return 0
+  fi
+  log "Carve ${parent} → children (by ${owner_org})"
   "${INVOKE}" "${owner_org}" invoke SplitProduct "${parent}" "${children_json}" >/dev/null 2>&1
-  ok "${parent} 分割完了"
+  ok "${parent} 切り出し完了"
 }
 
 seed_merge() {

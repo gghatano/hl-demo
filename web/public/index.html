@@ -53,8 +53,8 @@
       </button>
       <button class="menu-card" data-view="viewSplit">
         <div class="menu-icon">✂️</div>
-        <div class="menu-title">素材を分割</div>
-        <div class="menu-desc">1 つの素材を N (≥2) 個に切断。親は CONSUMED 状態になります。</div>
+        <div class="menu-title">素材を切り出し</div>
+        <div class="menu-desc">素材から必要分だけ切り出して別 ID にする。親素材は残り (ACTIVE) そのまま使えます。</div>
       </button>
       <button class="menu-card" data-view="viewMerge">
         <div class="menu-icon">🔗</div>
@@ -153,13 +153,13 @@
     <div id="transferResult"></div>
   </main>
 
-  <!-- 分割 -->
+  <!-- 切り出し -->
   <main id="viewSplit" class="view">
     <div class="view-head">
-      <h2>✂️ 素材を分割</h2>
+      <h2>✂️ 素材を切り出し</h2>
       <button class="btn-back" data-view="viewHome">← ホームへ</button>
     </div>
-    <p class="view-hint">親の現所有者として、N ≥ 2 の子に分割。親は CONSUMED となり、以降の譲渡・分割・接合はできません。</p>
+    <p class="view-hint">親から一部を切り出して別の productId を付ける。親は ACTIVE のまま残り、同じ親から何度でも切り出せます。CONSUMED 済の素材は切り出せません。</p>
     <div class="form-card">
       <div class="form-row">
         <label for="splitSelect">親を手持ちから選択 (ACTIVE のみ)</label>
@@ -170,11 +170,11 @@
         <input type="text" id="splitParentId" placeholder="例: S-A-002">
       </div>
       <div class="form-row">
-        <label>子 (2 つ以上)</label>
+        <label>切り出す子 (1 つ以上)</label>
         <div id="splitChildren"></div>
         <button id="btnAddSplitChild" class="btn-secondary">+ 子を追加</button>
       </div>
-      <button id="btnSplit">分割実行</button>
+      <button id="btnSplit">切り出し実行</button>
     </div>
     <div id="splitResult"></div>
   </main>

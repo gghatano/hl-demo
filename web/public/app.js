@@ -235,9 +235,9 @@ function renderHistoryList(events) {
     switch (type) {
       case 'CREATE':     detail = `${esc(mspLabel(ev.toOwner))} が新規登録`; break;
       case 'TRANSFER':   detail = `${esc(mspLabel(ev.fromOwner))} → ${esc(mspLabel(ev.toOwner))}`; break;
-      case 'SPLIT':      detail = `${esc(mspLabel(ev.fromOwner))} が分割 (子: ${(ev.children || []).map(esc).join(', ')})`; break;
+      case 'SPLIT':      detail = `${esc(mspLabel(ev.fromOwner))} が切り出し (子: ${(ev.children || []).map(esc).join(', ')})`; break;
       case 'MERGE':      detail = `${esc(mspLabel(ev.fromOwner))} が接合素材として消費 (子: ${(ev.children || []).map(esc).join(', ')})`; break;
-      case 'SPLIT_FROM': detail = `分割由来。親: ${(ev.parents || []).map(esc).join(', ')}`; break;
+      case 'SPLIT_FROM': detail = `切り出し由来。親: ${(ev.parents || []).map(esc).join(', ')}`; break;
       case 'MERGE_FROM': detail = `接合由来。親: ${(ev.parents || []).map(esc).join(', ')}`; break;
       default:           detail = esc(JSON.stringify(ev));
     }
@@ -429,13 +429,13 @@ document.getElementById('btnSplit').addEventListener('click', async () => {
     }
     children.push({ childId: cid, toOwner: to, metadata });
   }
-  if (children.length < 2) return setError(splitResult, '子を 2 つ以上入力してください');
+  if (children.length < 1) return setError(splitResult, '子を 1 つ以上入力してください');
   setLoading(splitResult);
   try {
     const data = await api('POST', `/api/products/${encodeURIComponent(pid)}/split`, { children });
     const kids = children.map((c) => `<li>${esc(c.childId)} → ${esc(mspLabel(c.toOwner))}</li>`).join('');
-    const extra = `<div class="info-box">親 ${esc(pid)} を ${children.length} 個に分割しました。<ul>${kids}</ul></div>`;
-    setResult(splitResult, '分割完了', data, extra);
+    const extra = `<div class="info-box">親 ${esc(pid)} から ${children.length} 個を切り出しました。親は ACTIVE のまま残ります。<ul>${kids}</ul></div>`;
+    setResult(splitResult, '切り出し完了', data, extra);
   } catch (e) {
     setError(splitResult, e.message);
   }

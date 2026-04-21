@@ -31,7 +31,7 @@ describe('SplitProduct', () => {
     }
   }
 
-  it('splits parent into multiple children (N>=2) and marks parent CONSUMED', async () => {
+  it('carves children out of parent; parent stays ACTIVE and records children', async () => {
     await seedActiveParent('S1', 'Org3MSP');
 
     const ctxSplit = createMockContext({ mspId: 'Org3MSP', store, txTimestampISO: '2026-04-15T11:00:00.000Z', identityId: 'x509::CN=Admin@org3' });
@@ -42,10 +42,11 @@ describe('SplitProduct', () => {
     ]);
     const result = JSON.parse(await contract.SplitProduct(ctxSplit, 'S1', childrenJson));
 
-    // parent verification
+    // parent: ACTIVE のまま、children が記録される
     const parentStored = parseStored(ctxSplit, 'S1');
-    expect(parentStored.status).to.equal('CONSUMED');
+    expect(parentStored.status).to.equal('ACTIVE');
     expect(parentStored.children).to.deep.equal(['S1-a', 'S1-b', 'S1-c']);
+    expect(parentStored.currentOwner).to.equal('Org3MSP');
     expect(parentStored.lastActor.mspId).to.equal('Org3MSP');
     expect(parentStored.updatedAt).to.equal('2026-04-15T11:00:00.000Z');
 
@@ -64,8 +65,36 @@ describe('SplitProduct', () => {
     expect(parseStored(ctxSplit, 'S1-c').currentOwner).to.equal('Org3MSP');
 
     // return value sanity
-    expect(result.parent.status).to.equal('CONSUMED');
+    expect(result.parent.status).to.equal('ACTIVE');
     expect(result.children).to.have.length(3);
+  });
+
+  it('allows carving a single child (N=1)', async () => {
+    await seedActiveParent('S1', 'Org3MSP');
+    const ctx = createMockContext({ mspId: 'Org3MSP', store });
+    const result = JSON.parse(await contract.SplitProduct(ctx, 'S1',
+      JSON.stringify([{ childId: 'S1-a', toOwner: 'Org3MSP' }])
+    ));
+    expect(result.children).to.have.length(1);
+    expect(parseStored(ctx, 'S1').status).to.equal('ACTIVE');
+    expect(parseStored(ctx, 'S1').children).to.deep.equal(['S1-a']);
+  });
+
+  it('allows multiple rounds of carving from the same parent', async () => {
+    await seedActiveParent('S1', 'Org3MSP');
+    const ctx1 = createMockContext({ mspId: 'Org3MSP', store });
+    await contract.SplitProduct(ctx1, 'S1', JSON.stringify([
+      { childId: 'S1-a', toOwner: 'Org3MSP' },
+      { childId: 'S1-b', toOwner: 'Org3MSP' },
+    ]));
+    // 2 回目の切り出し (S1 はまだ ACTIVE)
+    const ctx2 = createMockContext({ mspId: 'Org3MSP', store });
+    await contract.SplitProduct(ctx2, 'S1', JSON.stringify([
+      { childId: 'S1-c', toOwner: 'Org5MSP' },
+    ]));
+    const parent = parseStored(ctx2, 'S1');
+    expect(parent.status).to.equal('ACTIVE');
+    expect(parent.children).to.deep.equal(['S1-a', 'S1-b', 'S1-c']); // cumulative, sorted
   });
 
   it('sorts parent.children lexicographically (deterministic)', async () => {
@@ -91,17 +120,23 @@ describe('SplitProduct', () => {
       .to.be.rejectedWith(/PRODUCT_NOT_FOUND/);
   });
 
-  it('rejects when parent is CONSUMED (double split)', async () => {
-    await seedActiveParent('S1', 'Org3MSP');
-    const ctx1 = createMockContext({ mspId: 'Org3MSP', store });
-    await contract.SplitProduct(ctx1, 'S1', JSON.stringify([
-      { childId: 'S1-a', toOwner: 'Org3MSP' },
-      { childId: 'S1-b', toOwner: 'Org3MSP' },
-    ]));
-    const ctx2 = createMockContext({ mspId: 'Org3MSP', store });
-    await expect(contract.SplitProduct(ctx2, 'S1', JSON.stringify([
-      { childId: 'S1-c', toOwner: 'Org3MSP' },
-      { childId: 'S1-d', toOwner: 'Org3MSP' },
+  it('rejects when parent is CONSUMED (from a Merge)', async () => {
+    // CONSUMED に遷移するのは Merge のみ。切り出しを何回やっても ACTIVE。
+    // 2 素材を作り、Merge で親を CONSUMED にしてから Split を試みる。
+    const ctxCreate1 = createMockContext({ mspId: 'Org1MSP', store });
+    await contract.CreateProduct(ctxCreate1, 'P1', 'Org1MSP', 'Org1MSP', '', '', '');
+    const ctxCreate2 = createMockContext({ mspId: 'Org2MSP', store });
+    await contract.CreateProduct(ctxCreate2, 'P2', 'Org2MSP', 'Org2MSP', '', '', '');
+    const ctxXfer1 = createMockContext({ mspId: 'Org1MSP', store });
+    await contract.TransferProduct(ctxXfer1, 'P1', 'Org1MSP', 'Org3MSP');
+    const ctxXfer2 = createMockContext({ mspId: 'Org2MSP', store });
+    await contract.TransferProduct(ctxXfer2, 'P2', 'Org2MSP', 'Org3MSP');
+    const ctxMerge = createMockContext({ mspId: 'Org3MSP', store });
+    await contract.MergeProducts(ctxMerge, JSON.stringify(['P1', 'P2']), JSON.stringify({ childId: 'CHILD' }));
+    // P1 は CONSUMED (Merge 由来)
+    const ctxBad = createMockContext({ mspId: 'Org3MSP', store });
+    await expect(contract.SplitProduct(ctxBad, 'P1', JSON.stringify([
+      { childId: 'X', toOwner: 'Org3MSP' },
     ]))).to.be.rejectedWith(/PARENT_NOT_ACTIVE/);
   });
 
@@ -114,12 +149,11 @@ describe('SplitProduct', () => {
     ]))).to.be.rejectedWith(/MSP_NOT_AUTHORIZED/);
   });
 
-  it('rejects children count < 2', async () => {
+  it('rejects empty children array', async () => {
     await seedActiveParent('S1', 'Org3MSP');
     const ctx = createMockContext({ mspId: 'Org3MSP', store });
-    await expect(contract.SplitProduct(ctx, 'S1', JSON.stringify([
-      { childId: 'S1-a', toOwner: 'Org3MSP' },
-    ]))).to.be.rejectedWith(/at least 2/);
+    await expect(contract.SplitProduct(ctx, 'S1', JSON.stringify([])))
+      .to.be.rejectedWith(/at least 1/);
   });
 
   it('rejects duplicate childId in request', async () => {

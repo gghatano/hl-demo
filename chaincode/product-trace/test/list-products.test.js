@@ -54,19 +54,30 @@ describe('ListProductsByOwner', () => {
     expect(listOrg4.map((p) => p.productId)).to.deep.equal(['A']);
   });
 
-  it('includes CONSUMED products whose currentOwner still matches', async () => {
-    await seed('P', 'Org1MSP', 'Org3MSP');
+  it('includes CONSUMED products (via Merge) whose currentOwner still matches', async () => {
+    // CONSUMED になるのは Merge 経由のみ。2 素材を作って Merge。
+    await seed('P1', 'Org1MSP', 'Org3MSP');
+    await seed('P2', 'Org2MSP', 'Org3MSP');
     const ctx = createMockContext({ mspId: 'Org3MSP', store });
-    await contract.SplitProduct(ctx, 'P', JSON.stringify([
-      { childId: 'P-a', toOwner: 'Org3MSP' },
-      { childId: 'P-b', toOwner: 'Org3MSP' },
-    ]));
-    // P is now CONSUMED, currentOwner still Org3MSP
+    await contract.MergeProducts(ctx, JSON.stringify(['P1', 'P2']), JSON.stringify({ childId: 'C' }));
+    // P1, P2 are CONSUMED, currentOwner still Org3MSP. C は ACTIVE currentOwner Org3MSP。
     const list = await listAs('Org3MSP', 'Org3MSP');
-    expect(list.map((p) => p.productId)).to.deep.equal(['P', 'P-a', 'P-b']);
-    const p = list.find((x) => x.productId === 'P');
-    expect(p.status).to.equal('CONSUMED');
-    expect(p.children).to.deep.equal(['P-a', 'P-b']);
+    expect(list.map((p) => p.productId)).to.deep.equal(['C', 'P1', 'P2']);
+    const p1 = list.find((x) => x.productId === 'P1');
+    expect(p1.status).to.equal('CONSUMED');
+    expect(p1.children).to.deep.equal(['C']);
+  });
+
+  it('keeps carved parent ACTIVE in the list', async () => {
+    await seed('S', 'Org1MSP', 'Org3MSP');
+    const ctx = createMockContext({ mspId: 'Org3MSP', store });
+    await contract.SplitProduct(ctx, 'S', JSON.stringify([
+      { childId: 'S-a', toOwner: 'Org3MSP' },
+      { childId: 'S-b', toOwner: 'Org3MSP' },
+    ]));
+    const list = await listAs('Org3MSP', 'Org3MSP');
+    expect(list.map((p) => p.productId)).to.deep.equal(['S', 'S-a', 'S-b']);
+    expect(list.find((x) => x.productId === 'S').status).to.equal('ACTIVE');
   });
 
   it('returns empty array when no products exist', async () => {

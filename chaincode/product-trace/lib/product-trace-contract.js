@@ -189,8 +189,11 @@ class ProductTraceContract extends Contract {
     return JSON.stringify(product);
   }
 
-  // SplitProduct: 親1→子N (N>=2)。
-  // childrenJson は [{childId, toOwner, metadataJson, millSheetHash, millSheetURI}, ...] の JSON 文字列。
+  // SplitProduct: 「切り出し」操作 (親は ACTIVE のまま、子 N>=1 を新規生成)
+  // v1.2 までは SPLIT = 親 CONSUMED + 子 N>=2 だったが、鋼材業務では「鋼板から一部を
+  // 切り出しても親は残る」モデルの方が直感的なため挙動を変更。
+  // 親の children[] は cumulative に追加 (同じ親から複数回切り出し可能)。
+  // childrenJson は [{childId, toOwner, metadataJson, millSheetHash, millSheetURI}, ...]
   async SplitProduct(ctx, parentId, childrenJson) {
     if (!parentId || childrenJson === undefined || childrenJson === null) {
       throw new ChaincodeError(
@@ -208,10 +211,10 @@ class ProductTraceContract extends Contract {
         `childrenJson is not valid JSON: ${e.message}`
       );
     }
-    if (!Array.isArray(childSpecs) || childSpecs.length < 2) {
+    if (!Array.isArray(childSpecs) || childSpecs.length < 1) {
       throw new ChaincodeError(
         ErrorCodes.INVALID_ARGUMENT,
-        'childrenJson must be an array with at least 2 elements'
+        'childrenJson must be an array with at least 1 element'
       );
     }
 
@@ -298,9 +301,9 @@ class ProductTraceContract extends Contract {
       });
     }
 
-    // 親更新 (CONSUMED + children 記録)
-    parent.status = STATUS_CONSUMED;
-    parent.children = normalizeIds(childIds);
+    // 親更新 (切り出し: status は ACTIVE のまま、children に追記)
+    // 複数回の切り出しで cumulative に追加できるよう、既存 children とマージ → normalize
+    parent.children = normalizeIds([...(parent.children || []), ...childIds]);
     parent.updatedAt = now;
     parent.lastActor = { mspId, id: callerId };
     await ctx.stub.putState(parentId, encodeProduct(parent));
@@ -566,17 +569,32 @@ class ProductTraceContract extends Contract {
         const ownerChanged = product.currentOwner !== prev.currentOwner;
         const statusTransitionConsumed = prev.status === STATUS_ACTIVE
           && product.status === STATUS_CONSUMED;
+        // 切り出し (SPLIT) 判定: 親 status が ACTIVE のまま children が増加
+        const prevChildren = prev.children || [];
+        const curChildren = product.children || [];
+        const prevSet = new Set(prevChildren);
+        const addedChildren = curChildren.filter((c) => !prevSet.has(c));
 
         if (statusTransitionConsumed) {
-          const children = product.children || [];
-          // Split の子は常に N>=2、Merge の子は 1 のため children 数で判定
-          const eventType = children.length >= 2 ? 'SPLIT' : 'MERGE';
+          // Merge: 親が ACTIVE→CONSUMED に遷移 (接合で消費された)
           events.push({
-            eventType,
+            eventType: 'MERGE',
             productId: product.productId,
             fromOwner: product.currentOwner,
             toOwner: null,
-            children,
+            children: curChildren,
+            actor,
+            txId: km.txId,
+            timestamp: tsIso,
+          });
+        } else if (addedChildren.length > 0) {
+          // Split = 切り出し: 親 ACTIVE のまま、children に追加があった
+          events.push({
+            eventType: 'SPLIT',
+            productId: product.productId,
+            fromOwner: product.currentOwner,
+            toOwner: product.currentOwner,
+            children: addedChildren,
             actor,
             txId: km.txId,
             timestamp: tsIso,
@@ -592,7 +610,7 @@ class ProductTraceContract extends Contract {
             timestamp: tsIso,
           });
         }
-        // owner / status いずれも無変化 → イベント emit 無し
+        // owner / status / children いずれも無変化 → イベント emit 無し
       }
 
       prev = product;

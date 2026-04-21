@@ -80,20 +80,23 @@ describe('TransferProduct', () => {
 
   // v2 追加 --------------------------------------------------------
 
-  it('rejects transferring a CONSUMED product', async () => {
+  it('rejects transferring a CONSUMED product (Merge-consumed parent)', async () => {
+    // CONSUMED になるのは Merge のみ (切り出しでは親 ACTIVE 維持)
     const store = new Map();
-    const ctxCreate = createMockContext({ mspId: 'Org1MSP', store });
-    await contract.CreateProduct(ctxCreate, 'S1', 'Org1MSP', 'Org1MSP');
-    const ctxXfer = createMockContext({ mspId: 'Org1MSP', store });
-    await contract.TransferProduct(ctxXfer, 'S1', 'Org1MSP', 'Org3MSP');
-    const ctxSplit = createMockContext({ mspId: 'Org3MSP', store });
-    await contract.SplitProduct(ctxSplit, 'S1', JSON.stringify([
-      { childId: 'a', toOwner: 'Org3MSP' },
-      { childId: 'b', toOwner: 'Org3MSP' },
-    ]));
-    const ctxBad = createMockContext({ mspId: 'Org3MSP', store });
+    const c1 = createMockContext({ mspId: 'Org1MSP', store });
+    await contract.CreateProduct(c1, 'S1', 'Org1MSP', 'Org1MSP');
+    const c2 = createMockContext({ mspId: 'Org2MSP', store });
+    await contract.CreateProduct(c2, 'S2', 'Org2MSP', 'Org2MSP');
+    const tx1 = createMockContext({ mspId: 'Org1MSP', store });
+    await contract.TransferProduct(tx1, 'S1', 'Org1MSP', 'Org3MSP');
+    const tx2 = createMockContext({ mspId: 'Org2MSP', store });
+    await contract.TransferProduct(tx2, 'S2', 'Org2MSP', 'Org3MSP');
+    const mg = createMockContext({ mspId: 'Org3MSP', store });
+    await contract.MergeProducts(mg, JSON.stringify(['S1', 'S2']), JSON.stringify({ childId: 'P' }));
+    // S1 is now CONSUMED
+    const bad = createMockContext({ mspId: 'Org3MSP', store });
     await expect(
-      contract.TransferProduct(ctxBad, 'S1', 'Org3MSP', 'Org5MSP')
+      contract.TransferProduct(bad, 'S1', 'Org3MSP', 'Org5MSP')
     ).to.be.rejectedWith(/PARENT_NOT_ACTIVE/);
   });
 
