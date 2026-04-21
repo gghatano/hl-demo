@@ -2,10 +2,12 @@
 
 ## 動作環境
 
-- OS: Ubuntu 22.04 LTS（WSL2 可）
-- CPU: 2 core 以上
-- RAM: 8 GB 以上（WSL2 は `.wslconfig` で確保）
-- Disk: 10 GB 以上空き
+- OS: Ubuntu 22.04 LTS（WSL2 可）/ macOS (Apple Silicon, Colima 経由)
+- CPU: 2 core 以上（4 core 推奨）
+- RAM: 8 GB 以上（WSL2 は `.wslconfig` / Colima は `--memory 6` 以上）
+- Disk: 10 GB 以上空き（Colima は `--disk 30` 推奨）
+
+一次サポートは Linux。macOS は Colima 利用を前提に動作確認済み（詳細後述）。
 
 ## 必須ソフトウェア
 
@@ -15,7 +17,7 @@
 | Node.js | 18 LTS | chaincode ビルド / L1 テスト |
 | jq | 1.6+ | スクリプト全般で JSON 整形に使用 |
 | git | 任意 | fabric-samples 取得に使用 |
-| bash | 5+ | `set -euo pipefail` 前提 |
+| bash | 3.2+ | scripts は macOS bash 3.2 互換で書いてある |
 | curl | 任意 | setup.sh で使用 |
 
 ## Fabric バージョン（固定）
@@ -61,6 +63,44 @@ sudo usermod -aG docker "$USER"   # → 再ログイン
 # または未反映シェルで一時的に:
 sg docker -c './scripts/network_up.sh'
 ```
+
+## macOS (Apple Silicon) 手順
+
+**Docker Desktop は避け、Colima を使う**。Docker Desktop は container の `/var/run/docker.sock` bind-mount を socket proxy に差し替える仕組みが Fabric の chaincode ビルドと非互換で、`No such image: hyperledger/fabric-nodeenv:2.5` で install が落ちる（詳細 [`fabric-pitfalls.md`](fabric-pitfalls.md)）。
+
+```bash
+# Homebrew（未導入なら https://brew.sh 参照）
+brew install colima docker docker-compose jq node
+
+# Docker CLI プラグイン（docker compose）が ~/.docker/cli-plugins に無ければ brew 導入分で揃う
+brew install docker-compose
+
+# Colima VM 起動（初回のみ 1-2 分）
+colima start --cpu 4 --memory 6 --disk 30
+
+# context 確認（colima * がアクティブであること）
+docker context ls
+docker context use colima
+
+# 動作確認
+docker --version && docker compose version && node --version && jq --version
+
+# 以降は Linux 手順と同じ
+./scripts/setup.sh
+./scripts/network_up.sh
+./scripts/deploy_chaincode.sh
+```
+
+運用:
+
+| 操作 | コマンド |
+|---|---|
+| 停止 | `colima stop` |
+| 起動（前回設定 resume） | `colima start` |
+| リソース変更 | `colima stop && colima start --cpu 6 --memory 8` |
+| 完全削除（VM ごと）| `colima delete` |
+
+Docker Desktop と Colima は **同時起動しない**。context が混乱するので使う方だけ起動する。
 
 ## WSL2 注意
 

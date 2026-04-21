@@ -89,3 +89,5 @@ DEV_CC=$(docker ps --format '{{.Names}}' | grep '^dev-peer0.org1.*product-trace'
 - sudo でスクリプト実行すると root 所有ファイルが残って次に詰む
 - chaincode エラーは `[CODE]` プレフィックス付き（message 本文しか伝搬しない）
 - MVCC_READ_CONFLICT 時のリトライ
+- **macOS Docker Desktop の socket proxy で `No such image: hyperledger/fabric-nodeenv:2.5` → Colima に移行**
+- macOS bash 3.2 で `${var,,}: bad substitution` → scripts は 3.2 互換で書く

@@ -168,11 +168,7 @@ main() {
   verify
   echo
   ok "Phase 2 network up 完了"
-  echo "${C_DIM}次: Phase 3 Chaincode 実装 / Phase 4 deploy_chaincode.sh${C_OFF}"
+  echo "${C_DIM}次: ./scripts/deploy_chaincode.sh で chaincode を deploy${C_OFF}"
   echo "${C_DIM}クリーンアップ: ./scripts/reset.sh${C_OFF}"
-  echo
-  echo "${C_DIM}[Phase 4 申し送り] chaincode deploy 時は endorsement policy を必ず明示:${C_OFF}"
-  echo "${C_DIM}  --signature-policy \"OR('Org1MSP.peer','Org2MSP.peer','Org3MSP.peer')\"${C_OFF}"
-  echo "${C_DIM}  default(majority) だと 3Org 化の意味が消える（fabric-pitfalls 参照）${C_OFF}"
 }
 main "$@"

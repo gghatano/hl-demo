@@ -232,6 +232,6 @@ main() {
   record_images
   echo
   ok "Phase 1 setup 完了"
-  echo "${C_DIM}次: Phase 2 ネットワーク構築（scripts/network_up.sh 未実装）${C_OFF}"
+  echo "${C_DIM}次: ./scripts/network_up.sh でネットワーク起動${C_OFF}"
 }
 main "$@"
