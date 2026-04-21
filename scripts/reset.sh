@@ -51,7 +51,10 @@ confirm() {
   [[ $ASSUME_YES -eq 1 ]] && return 0
   warn "Fabric ネットワークを完全に削除します（実行中コンテナ・chaincode image・volume）"
   read -r -p "続行しますか? [y/N] " ans
-  [[ "${ans,,}" == "y" || "${ans,,}" == "yes" ]]
+  case "${ans}" in
+    y|Y|yes|YES|Yes) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 down_test_network() {

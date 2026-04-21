@@ -18,6 +18,7 @@ organizations/
 channel-artifacts/
 *.tar.gz
 build/
+.last_product_id
 
 # ログ
 *.log
