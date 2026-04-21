@@ -454,6 +454,47 @@ class ProductTraceContract extends Contract {
     return JSON.stringify(product);
   }
 
+  // ListProductsByOwner: 指定 MSP が currentOwner である全 product を返却。
+  // PoC 簡易実装として getStateByRange で全 state を scan + filter する。
+  // CouchDB rich query を使わない (goleveldb 前提)。全件スキャンのため件数増大時は要改善。
+  // status (ACTIVE / CONSUMED) による絞り込みはクライアント側で行う想定。
+  async ListProductsByOwner(ctx, ownerMspId) {
+    if (!ownerMspId) {
+      throw new ChaincodeError(
+        ErrorCodes.INVALID_ARGUMENT,
+        'ownerMspId is required'
+      );
+    }
+    const iterator = await ctx.stub.getStateByRange('', '');
+    const results = [];
+    try {
+      while (true) {
+        // eslint-disable-next-line no-await-in-loop
+        const res = await iterator.next();
+        if (res.value && res.value.value && res.value.value.length > 0) {
+          try {
+            const product = decodeProduct(res.value.value);
+            if (product.currentOwner === ownerMspId) {
+              results.push(product);
+            }
+          } catch (e) {
+            // 非 JSON エントリは無視
+          }
+        }
+        if (res.done) break;
+      }
+    } finally {
+      await iterator.close();
+    }
+    // productId 昇順で決定性
+    results.sort((a, b) => {
+      if (a.productId < b.productId) return -1;
+      if (a.productId > b.productId) return 1;
+      return 0;
+    });
+    return JSON.stringify(results);
+  }
+
   // GetHistory: query only (state 書き換えなし)。
   // v2: CREATE / TRANSFER に加え SPLIT / MERGE / SPLIT_FROM / MERGE_FROM を emit
   async GetHistory(ctx, productId) {

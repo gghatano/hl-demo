@@ -220,6 +220,22 @@ app.get('/api/products/:id/lineage', resolveOrg, async (req, res) => {
   }
 });
 
+// GET /api/products?owner=Org3MSP — ListProductsByOwner
+// org クエリは「どの組織として query するか」(evaluateTransaction 用)
+// owner クエリは「どの MSP が保有する product を列挙するか」
+// owner 未指定時は現 org の MSP をデフォルトにする。
+app.get('/api/products', resolveOrg, async (req, res) => {
+  try {
+    const ownerMspId = req.query.owner || ORG_CONFIG[req.org].mspId;
+    const contract = await getContract(req.org);
+    const result = await contract.evaluateTransaction('ListProductsByOwner', ownerMspId);
+    res.json(JSON.parse(decodeResult(result)));
+  } catch (err) {
+    const msg = extractChaincodeError(err);
+    res.status(500).json({ error: msg });
+  }
+});
+
 // POST /api/products/:id/transfer — TransferProduct
 app.post('/api/products/:id/transfer', resolveOrg, async (req, res) => {
   try {

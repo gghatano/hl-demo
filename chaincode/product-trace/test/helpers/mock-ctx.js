@@ -34,6 +34,28 @@ function createMockContext({ mspId = 'Org1MSP', identityId = 'x509::CN=Admin@org
     putState: sinon.stub().callsFake(async (key, value) => {
       sharedStore.set(key, value);
     }),
+    // getStateByRange: startKey='' endKey='' のとき全件を返す想定 (ListProductsByOwner 用)。
+    // 実 Fabric と同様、key 昇順で enumerate。
+    getStateByRange: sinon.stub().callsFake(async (_startKey, _endKey) => {
+      const entries = [...sharedStore.entries()].sort((a, b) => {
+        if (a[0] < b[0]) return -1;
+        if (a[0] > b[0]) return 1;
+        return 0;
+      });
+      let i = 0;
+      return {
+        next: async () => {
+          if (i >= entries.length) return { value: null, done: true };
+          const [k, v] = entries[i];
+          i += 1;
+          return {
+            value: { key: k, value: v },
+            done: i >= entries.length,
+          };
+        },
+        close: async () => {},
+      };
+    }),
     getTxID: sinon.stub().returns(txId),
     getTxTimestamp: sinon.stub().returns(makeTimestampNumeric(txTimestampISO)),
     getHistoryForKey: sinon.stub(),
