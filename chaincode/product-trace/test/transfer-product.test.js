@@ -77,4 +77,50 @@ describe('TransferProduct', () => {
       contract.TransferProduct(ctx2, 'X001', 'Org1MSP', 'Org1MSP')
     ).to.be.rejectedWith(/must differ/);
   });
+
+  // v2 追加 --------------------------------------------------------
+
+  it('rejects transferring a CONSUMED product (Merge-consumed parent)', async () => {
+    // CONSUMED になるのは Merge のみ (切り出しでは親 ACTIVE 維持)
+    const store = new Map();
+    const c1 = createMockContext({ mspId: 'Org1MSP', store });
+    await contract.CreateProduct(c1, 'S1', 'Org1MSP', 'Org1MSP');
+    const c2 = createMockContext({ mspId: 'Org2MSP', store });
+    await contract.CreateProduct(c2, 'S2', 'Org2MSP', 'Org2MSP');
+    const tx1 = createMockContext({ mspId: 'Org1MSP', store });
+    await contract.TransferProduct(tx1, 'S1', 'Org1MSP', 'Org3MSP');
+    const tx2 = createMockContext({ mspId: 'Org2MSP', store });
+    await contract.TransferProduct(tx2, 'S2', 'Org2MSP', 'Org3MSP');
+    const mg = createMockContext({ mspId: 'Org3MSP', store });
+    await contract.MergeProducts(mg, JSON.stringify(['S1', 'S2']), JSON.stringify({ childId: 'P' }));
+    // S1 is now CONSUMED
+    const bad = createMockContext({ mspId: 'Org3MSP', store });
+    await expect(
+      contract.TransferProduct(bad, 'S1', 'Org3MSP', 'Org5MSP')
+    ).to.be.rejectedWith(/PARENT_NOT_ACTIVE/);
+  });
+
+  it('rejects invalid toOwner MSP', async () => {
+    const ctx = createMockContext({ mspId: 'Org1MSP' });
+    await seedProduct(contract, ctx);
+    const ctx2 = createMockContext({ mspId: 'Org1MSP' });
+    ctx2.stub._store.set('X001', ctx.stub._store.get('X001'));
+    await expect(
+      contract.TransferProduct(ctx2, 'X001', 'Org1MSP', 'BogusMSP')
+    ).to.be.rejectedWith(/not a valid MSP/);
+  });
+
+  it('accepts transfer to new v2 orgs (Org4MSP, Org5MSP)', async () => {
+    const ctx = createMockContext({ mspId: 'Org1MSP' });
+    await seedProduct(contract, ctx);
+    const ctx2 = createMockContext({ mspId: 'Org1MSP' });
+    ctx2.stub._store.set('X001', ctx.stub._store.get('X001'));
+    const result = await contract.TransferProduct(ctx2, 'X001', 'Org1MSP', 'Org4MSP');
+    expect(JSON.parse(result).currentOwner).to.equal('Org4MSP');
+
+    const ctx3 = createMockContext({ mspId: 'Org4MSP' });
+    ctx3.stub._store.set('X001', ctx2.stub._store.get('X001'));
+    const result2 = await contract.TransferProduct(ctx3, 'X001', 'Org4MSP', 'Org5MSP');
+    expect(JSON.parse(result2).currentOwner).to.equal('Org5MSP');
+  });
 });

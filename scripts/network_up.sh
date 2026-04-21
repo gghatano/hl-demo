@@ -1,24 +1,34 @@
 #!/usr/bin/env bash
-# network_up.sh — Phase 2 ネットワーク起動
-# test-network 標準フローで 2Org 起動 → addOrg3 で 3Org 合流
-# MSP ID は fabric-samples 標準（Org1MSP/Org2MSP/Org3MSP, Issue #1）
+# network_up.sh — Phase 8: 5Org (Org1〜Org5) + supplychannel 起動
+#
+# 起動順序:
+#   1. fabric/test-network-wrapper/patches/ を fabric-samples/test-network/ に適用
+#   2. test-network 標準で 2Org (Org1+Org2) + orderer + supplychannel 起動
+#   3. addOrg3 で Org3 合流
+#   4. addOrg4 (patches 由来) で Org4 合流
+#   5. addOrg5 (patches 由来) で Org5 合流
+#   6. 5Org 稼働確認 (Org5 視点で channel getinfo)
+#
+# 期待稼働コンテナ: orderer 1 + peer 5 + CA 6 = 12
 
 set -euo pipefail
 
 # ===== 設定 =====
 CHANNEL_NAME="${CHANNEL_NAME:-supplychannel}"
 
-# test-network が使うポート（orderer=7050, Org1 peer=7051, Org2 peer=9051, Org3 peer=11051）
-FABRIC_PORTS=(7050 7051 9051 11051)
+# ポート: Org1=7051 / Org2=9051 / Org3=11051 / Org4=13051 / Org5=15051
+FABRIC_PORTS=(7050 7051 9051 11051 13051 15051)
 
-# 期待稼働数: orderer 1 + peer 3 + CA 4 (org1/org2/org3/orderer) = 8
-EXPECTED_CONTAINERS=8
+# 期待稼働数: orderer 1 + peer 5 + CA 6 (orderer/org1〜org5) = 12
+EXPECTED_CONTAINERS=12
 
 # ===== パス =====
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 SAMPLES_DIR="${REPO_ROOT}/fabric/fabric-samples"
 TEST_NET_DIR="${SAMPLES_DIR}/test-network"
+WRAPPER_DIR="${REPO_ROOT}/fabric/test-network-wrapper"
+PATCHES_DIR="${WRAPPER_DIR}/patches"
 
 # ===== 色 =====
 if [[ -t 1 ]]; then
@@ -36,14 +46,13 @@ usage() {
   cat <<EOF
 Usage: $(basename "$0") [options]
 
-test-network 標準フローで 3Org + supplychannel を起動。
+hl-proto v2 (Phase 8) の 5Org supplychannel を起動する。
 
 Options:
-  -c, --channel <name>   channel 名（default: supplychannel）
+  -c, --channel <name>   channel 名 (default: supplychannel)
   -h, --help             ヘルプ
 
-既存ネットワークがある場合はエラーで停止する。
-再起動する場合は scripts/reset.sh を先に実行。
+既存ネットワークがある場合はエラー停止。再起動時は scripts/reset.sh --yes 先行。
 EOF
 }
 
@@ -70,22 +79,27 @@ preflight() {
     err "addOrg3.sh が見つからない: ${TEST_NET_DIR}/addOrg3/addOrg3.sh"
     exit 1
   fi
+  if [[ ! -d "${PATCHES_DIR}/addOrg4" ]] || [[ ! -d "${PATCHES_DIR}/addOrg5" ]]; then
+    err "patches/addOrg{4,5} が見つからない: ${PATCHES_DIR}"
+    err "先に ${WRAPPER_DIR}/gen_addorg.sh 4 13051 13054 と 5 15051 15054 を実行してください"
+    exit 1
+  fi
   if ! docker info >/dev/null 2>&1; then
     err "docker daemon に接続できない"
     exit 1
   fi
 
-  # 既存コンテナ検出（peer/orderer/dev-peer 含む）
+  # 既存コンテナ検出 (peer/orderer/dev-peer)
   local running
   running="$(docker ps --format '{{.Names}}' | grep -E '^(peer|orderer|dev-peer)' || true)"
   if [[ -n "${running}" ]]; then
     err "既存の Fabric コンテナが稼働中:"
     echo "${running}" | sed 's/^/    /' >&2
-    err "scripts/reset.sh を実行してからやり直してください"
+    err "scripts/reset.sh --yes を実行してからやり直してください"
     exit 1
   fi
 
-  # ポート衝突検出
+  # ポート衝突
   local busy=()
   for port in "${FABRIC_PORTS[@]}"; do
     if (exec 3<>"/dev/tcp/127.0.0.1/${port}") 2>/dev/null; then
@@ -100,18 +114,68 @@ preflight() {
   fi
 }
 
-# ===== 2Org 起動 + channel 作成 =====
+# ===== patches 適用 =====
+# fabric-samples 側に addOrg4/5 と org4/5-scripts を配置する。
+# 既に存在する場合は冪等に上書き (既存生成物は reset.sh で掃除済前提)。
+apply_patches() {
+  log "==== patches 適用 (addOrg4/5, org4/5-scripts, envVar/setAnchorPeer 5Org 対応) ===="
+
+  # envVar.sh / setAnchorPeer.sh は fabric-samples 同梱の Org1-3 限定版を
+  # 5Org 対応版で上書きする。オリジナルは fabric-samples の git checkout で戻せる。
+  local core_scripts_src="${PATCHES_DIR}/scripts"
+  if [[ -f "${core_scripts_src}/envVar.sh" ]]; then
+    cp "${core_scripts_src}/envVar.sh" "${TEST_NET_DIR}/scripts/envVar.sh"
+    log "  envVar.sh → test-network/scripts/ (5Org 対応)"
+  fi
+  if [[ -f "${core_scripts_src}/setAnchorPeer.sh" ]]; then
+    cp "${core_scripts_src}/setAnchorPeer.sh" "${TEST_NET_DIR}/scripts/setAnchorPeer.sh"
+    chmod +x "${TEST_NET_DIR}/scripts/setAnchorPeer.sh"
+    log "  setAnchorPeer.sh → test-network/scripts/ (5Org 対応)"
+  fi
+
+  local n
+  for n in 4 5; do
+    local src="${PATCHES_DIR}/addOrg${n}"
+    local dst="${TEST_NET_DIR}/addOrg${n}"
+    if [[ ! -d "${src}" ]]; then
+      err "patches/addOrg${n} なし: ${src}"
+      exit 1
+    fi
+    log "  addOrg${n}/ → ${dst#${SAMPLES_DIR}/}"
+    rm -rf "${dst}"
+    cp -r "${src}" "${dst}"
+    chmod +x "${dst}/addOrg${n}.sh" 2>/dev/null || true
+    chmod +x "${dst}/ccp-generate.sh" 2>/dev/null || true
+    chmod +x "${dst}/fabric-ca/registerEnroll.sh" 2>/dev/null || true
+  done
+  for n in 4 5; do
+    local src="${PATCHES_DIR}/scripts/org${n}-scripts"
+    local dst="${TEST_NET_DIR}/scripts/org${n}-scripts"
+    if [[ ! -d "${src}" ]]; then
+      err "patches/scripts/org${n}-scripts なし: ${src}"
+      exit 1
+    fi
+    log "  scripts/org${n}-scripts/ → ${dst#${SAMPLES_DIR}/}"
+    rm -rf "${dst}"
+    cp -r "${src}" "${dst}"
+    chmod +x "${dst}/"*.sh 2>/dev/null || true
+  done
+  ok "patches 適用完了"
+}
+
+# ===== 2Org (Org1+Org2) + channel 起動 =====
 up_two_org() {
   log "==== test-network up (2Org + CA + channel=${CHANNEL_NAME}) ===="
   (cd "${TEST_NET_DIR}" && ./network.sh up createChannel -c "${CHANNEL_NAME}" -ca)
-  ok "2Org + ${CHANNEL_NAME} 起動完了"
+  ok "Org1+Org2 + ${CHANNEL_NAME} 起動完了"
 }
 
-# ===== Org3 合流 =====
-up_org3() {
-  log "==== addOrg3 up (join ${CHANNEL_NAME}) ===="
-  (cd "${TEST_NET_DIR}/addOrg3" && ./addOrg3.sh up -c "${CHANNEL_NAME}" -ca)
-  ok "Org3 合流完了"
+# ===== addOrg<N> 合流 汎用 =====
+up_org_n() {
+  local n="$1"
+  log "==== addOrg${n} up (join ${CHANNEL_NAME}) ===="
+  (cd "${TEST_NET_DIR}/addOrg${n}" && ./addOrg${n}.sh up -c "${CHANNEL_NAME}" -ca)
+  ok "Org${n} 合流完了"
 }
 
 # ===== 検証 =====
@@ -120,40 +184,40 @@ verify() {
   log "稼働中コンテナ:"
   docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -E '^(NAMES|peer|orderer|ca_)' | sed 's/^/  /'
 
-  # 期待数アサート（peer 3 + orderer 1 + CA 3 = 7）
+  # 期待数アサート (peer 5 + orderer 1 + CA 6 = 12)
   local actual
   actual="$(docker ps --format '{{.Names}}' | grep -Ec '^(peer[0-9]+\.org[0-9]+|orderer|ca_org[0-9]+|ca_orderer)' || true)"
   if [[ "${actual}" -ne "${EXPECTED_CONTAINERS}" ]]; then
     err "稼働コンテナ数が期待値と不一致: actual=${actual}, expected=${EXPECTED_CONTAINERS}"
-    err "peer3 + orderer1 + CA4 = 8 を期待"
+    err "peer5 + orderer1 + CA6 = 12 を期待"
     exit 1
   fi
   ok "稼働コンテナ数: ${actual}/${EXPECTED_CONTAINERS}"
 
-  # Org3 視点 channel 疎通確認
-  log "==== Org3 視点 channel 疎通確認 ===="
+  # Org5 視点 channel 疎通確認 (最後に合流した Org が channel を見えているか)
+  log "==== Org5 視点 channel 疎通確認 ===="
   local peer_bin="${SAMPLES_DIR}/bin/peer"
-  local org3_tls="${TEST_NET_DIR}/organizations/peerOrganizations/org3.example.com/peers/peer0.org3.example.com/tls/ca.crt"
-  local org3_msp="${TEST_NET_DIR}/organizations/peerOrganizations/org3.example.com/users/Admin@org3.example.com/msp"
+  local org5_tls="${TEST_NET_DIR}/organizations/peerOrganizations/org5.example.com/peers/peer0.org5.example.com/tls/ca.crt"
+  local org5_msp="${TEST_NET_DIR}/organizations/peerOrganizations/org5.example.com/users/Admin@org5.example.com/msp"
   if [[ ! -x "${peer_bin}" ]]; then
     warn "peer binary 見つからず: ${peer_bin} → skip"
-  elif [[ ! -f "${org3_tls}" ]]; then
-    warn "Org3 TLS cert 見つからず: ${org3_tls} → skip"
-  elif [[ ! -d "${org3_msp}" ]]; then
-    warn "Org3 Admin MSP 見つからず: ${org3_msp} → skip"
+  elif [[ ! -f "${org5_tls}" ]]; then
+    warn "Org5 TLS cert 見つからず: ${org5_tls} → skip"
+  elif [[ ! -d "${org5_msp}" ]]; then
+    warn "Org5 Admin MSP 見つからず: ${org5_msp} → skip"
   else
     local info
     if info=$(FABRIC_CFG_PATH="${SAMPLES_DIR}/config" \
               CORE_PEER_TLS_ENABLED=true \
-              CORE_PEER_LOCALMSPID=Org3MSP \
-              CORE_PEER_TLS_ROOTCERT_FILE="${org3_tls}" \
-              CORE_PEER_MSPCONFIGPATH="${org3_msp}" \
-              CORE_PEER_ADDRESS=localhost:11051 \
+              CORE_PEER_LOCALMSPID=Org5MSP \
+              CORE_PEER_TLS_ROOTCERT_FILE="${org5_tls}" \
+              CORE_PEER_MSPCONFIGPATH="${org5_msp}" \
+              CORE_PEER_ADDRESS=localhost:15051 \
               "${peer_bin}" channel getinfo -c "${CHANNEL_NAME}" 2>&1); then
-      ok "Org3 から ${CHANNEL_NAME} 参照成功"
+      ok "Org5 から ${CHANNEL_NAME} 参照成功"
       echo "${info}" | sed 's/^/    /'
     else
-      warn "Org3 視点 peer channel getinfo 失敗:"
+      warn "Org5 視点 peer channel getinfo 失敗:"
       echo "${info}" | sed 's/^/    /' >&2
     fi
   fi
@@ -163,12 +227,15 @@ main() {
   log "repo root: ${REPO_ROOT}"
   log "channel:   ${CHANNEL_NAME}"
   preflight
+  apply_patches
   up_two_org
-  up_org3
+  up_org_n 3
+  up_org_n 4
+  up_org_n 5
   verify
   echo
-  ok "Phase 2 network up 完了"
+  ok "Phase 8 network up 完了 (5Org)"
   echo "${C_DIM}次: ./scripts/deploy_chaincode.sh で chaincode を deploy${C_OFF}"
-  echo "${C_DIM}クリーンアップ: ./scripts/reset.sh${C_OFF}"
+  echo "${C_DIM}クリーンアップ: ./scripts/reset.sh --yes${C_OFF}"
 }
 main "$@"

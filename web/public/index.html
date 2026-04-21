@@ -3,82 +3,206 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HL-Proto Supply Chain Demo</title>
+  <title>hl-proto v2 — 鋼材トレーサビリティ</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
 </head>
 <body>
   <header>
-    <h1>Supply Chain Traceability Demo</h1>
-    <div class="org-selector">
+    <div class="header-left">
+      <h1>鋼材トレーサビリティ</h1>
+      <nav class="breadcrumb" id="breadcrumb">
+        <a href="#" id="btnHome">ホーム</a>
+      </nav>
+    </div>
+    <div class="header-right">
       <label for="orgSelect">操作組織:</label>
       <select id="orgSelect">
-        <option value="org1">Org1MSP - メーカー A</option>
-        <option value="org2">Org2MSP - 卸 B</option>
-        <option value="org3">Org3MSP - 販売店 C</option>
+        <option value="org1">高炉メーカー A (Org1MSP)</option>
+        <option value="org2">電炉メーカー X (Org2MSP)</option>
+        <option value="org3">加工業者 B (Org3MSP)</option>
+        <option value="org4">加工業者 Y (Org4MSP)</option>
+        <option value="org5">建設会社 D (Org5MSP)</option>
       </select>
-      <span id="orgBadge" class="badge org1">Org1MSP</span>
     </div>
   </header>
 
-  <main>
-    <div class="panels">
-      <!-- 製品登録 -->
-      <section class="panel" id="panelCreate">
-        <h2>製品登録 (CreateProduct)</h2>
-        <p class="hint">メーカー A (Org1MSP) のみ実行可能</p>
-        <div class="form-row">
-          <label for="createProductId">製品 ID:</label>
-          <input type="text" id="createProductId" placeholder="例: X001">
-        </div>
-        <button id="btnCreate">登録</button>
-      </section>
-
-      <!-- 製品移転 -->
-      <section class="panel" id="panelTransfer">
-        <h2>製品移転 (TransferProduct)</h2>
-        <p class="hint">現在の所有者として操作。移転先を選択。</p>
-        <div class="form-row">
-          <label for="transferProductId">製品 ID:</label>
-          <input type="text" id="transferProductId" placeholder="例: X001">
-        </div>
-        <div class="form-row">
-          <label for="transferTo">移転先:</label>
-          <select id="transferTo">
-            <option value="Org1MSP">Org1MSP - メーカー A</option>
-            <option value="Org2MSP" selected>Org2MSP - 卸 B</option>
-            <option value="Org3MSP">Org3MSP - 販売店 C</option>
-          </select>
-        </div>
-        <button id="btnTransfer">移転</button>
-      </section>
-
-      <!-- 製品照会 -->
-      <section class="panel" id="panelRead">
-        <h2>製品照会 (ReadProduct)</h2>
-        <div class="form-row">
-          <label for="readProductId">製品 ID:</label>
-          <input type="text" id="readProductId" placeholder="例: X001">
-        </div>
-        <button id="btnRead">照会</button>
-      </section>
-
-      <!-- 履歴照会 -->
-      <section class="panel" id="panelHistory">
-        <h2>来歴照会 (GetHistory)</h2>
-        <p class="hint">製品の全履歴を時系列で表示</p>
-        <div class="form-row">
-          <label for="historyProductId">製品 ID:</label>
-          <input type="text" id="historyProductId" placeholder="例: X001">
-        </div>
-        <button id="btnHistory">来歴確認</button>
-      </section>
+  <!-- ホーム: 業務メニュー (全組織共通) -->
+  <main id="viewHome" class="view active">
+    <p class="view-hint">実行したい業務を選択してください。組織別に権限があり、権限外の操作は実行時にエラーで拒否されます。</p>
+    <div class="menu-grid">
+      <button class="menu-card" data-view="viewInventory">
+        <div class="menu-icon">📦</div>
+        <div class="menu-title">手持ち素材一覧</div>
+        <div class="menu-desc">現在の組織が所有する素材を一覧表示。ACTIVE / CONSUMED 状態も確認可。</div>
+      </button>
+      <button class="menu-card" data-view="viewSearch">
+        <div class="menu-icon">🔎</div>
+        <div class="menu-title">素材を調べる</div>
+        <div class="menu-desc">素材 ID から現在の状態・履歴・系譜 DAG を一括表示。</div>
+      </button>
+      <button class="menu-card" data-view="viewCreate">
+        <div class="menu-icon">🏭</div>
+        <div class="menu-title">新規素材を登録</div>
+        <div class="menu-desc">鋼板・形鋼などの素材を新規に台帳へ登録 (メーカーのみ実行可能)。</div>
+      </button>
+      <button class="menu-card" data-view="viewTransfer">
+        <div class="menu-icon">📤</div>
+        <div class="menu-title">素材を譲渡</div>
+        <div class="menu-desc">保有している素材を他組織へ引き渡す。現所有者のみ実行可。</div>
+      </button>
+      <button class="menu-card" data-view="viewSplit">
+        <div class="menu-icon">✂️</div>
+        <div class="menu-title">素材を切り出し</div>
+        <div class="menu-desc">素材から必要分だけ切り出して別 ID にする。親素材は残り (ACTIVE) そのまま使えます。</div>
+      </button>
+      <button class="menu-card" data-view="viewMerge">
+        <div class="menu-icon">🔗</div>
+        <div class="menu-title">素材を接合</div>
+        <div class="menu-desc">2 つ以上の素材を 1 つに接合。全親を事前に集約しておく必要あり。</div>
+      </button>
     </div>
+  </main>
 
-    <!-- 結果表示 -->
-    <section id="resultSection">
-      <h2>結果</h2>
-      <div id="resultArea"></div>
-    </section>
+  <!-- 手持ち素材一覧 -->
+  <main id="viewInventory" class="view">
+    <div class="view-head">
+      <h2>📦 手持ち素材一覧</h2>
+      <button class="btn-back" data-view="viewHome">← ホームへ</button>
+    </div>
+    <p class="view-hint">現在の操作組織 <span id="invOrgLabel" class="org-badge"></span> が所有する全素材。</p>
+    <div class="toolbar">
+      <label><input type="checkbox" id="invShowConsumed"> CONSUMED も表示</label>
+      <button id="btnInvRefresh" class="btn-secondary">更新</button>
+    </div>
+    <div id="inventoryList"></div>
+  </main>
+
+  <!-- 素材を調べる -->
+  <main id="viewSearch" class="view">
+    <div class="view-head">
+      <h2>🔎 素材を調べる</h2>
+      <button class="btn-back" data-view="viewHome">← ホームへ</button>
+    </div>
+    <div class="form-row form-inline">
+      <label for="searchProductId">素材 ID:</label>
+      <input type="text" id="searchProductId" placeholder="例: P-B-001">
+      <button id="btnSearch">調べる</button>
+    </div>
+    <div id="searchResult"></div>
+  </main>
+
+  <!-- 新規素材登録 -->
+  <main id="viewCreate" class="view">
+    <div class="view-head">
+      <h2>🏭 新規素材を登録</h2>
+      <button class="btn-back" data-view="viewHome">← ホームへ</button>
+    </div>
+    <p class="view-hint">高炉メーカー A (Org1MSP) または 電炉メーカー X (Org2MSP) のみ実行可能。</p>
+    <div class="form-card">
+      <div class="form-row">
+        <label for="createProductId">素材 ID <span class="req">*</span></label>
+        <input type="text" id="createProductId" placeholder="例: S-A-003">
+      </div>
+      <div class="form-row">
+        <label for="createMetadata">metadata (JSON)</label>
+        <input type="text" id="createMetadata" placeholder='例: {"category":"plate","grade":"SS400","weightKg":10000}'>
+      </div>
+      <div class="form-row">
+        <label for="createMillSheetFile">ミルシート PDF (任意)</label>
+        <input type="file" id="createMillSheetFile" accept="application/pdf,.pdf">
+        <span id="createMillSheetHashLabel" class="hint"></span>
+      </div>
+      <div class="form-row">
+        <label for="createMillSheetURI">ミルシート 参照 URI (任意)</label>
+        <input type="text" id="createMillSheetURI" placeholder="例: https://example.com/mill/S-A-003.pdf">
+      </div>
+      <button id="btnCreate">登録実行</button>
+    </div>
+    <div id="createResult"></div>
+  </main>
+
+  <!-- 譲渡 -->
+  <main id="viewTransfer" class="view">
+    <div class="view-head">
+      <h2>📤 素材を譲渡</h2>
+      <button class="btn-back" data-view="viewHome">← ホームへ</button>
+    </div>
+    <p class="view-hint">現所有者 == 操作組織 が必須。手持ち素材から選ぶと ID 自動入力。</p>
+    <div class="form-card">
+      <div class="form-row">
+        <label for="transferSelect">手持ち素材から選択 (ACTIVE のみ)</label>
+        <select id="transferSelect"><option value="">—</option></select>
+      </div>
+      <div class="form-row">
+        <label for="transferProductId">素材 ID <span class="req">*</span></label>
+        <input type="text" id="transferProductId" placeholder="例: S-A-002">
+      </div>
+      <div class="form-row">
+        <label for="transferTo">譲渡先 <span class="req">*</span></label>
+        <select id="transferTo">
+          <option value="Org1MSP">Org1MSP - 高炉メーカー A</option>
+          <option value="Org2MSP">Org2MSP - 電炉メーカー X</option>
+          <option value="Org3MSP" selected>Org3MSP - 加工業者 B</option>
+          <option value="Org4MSP">Org4MSP - 加工業者 Y</option>
+          <option value="Org5MSP">Org5MSP - 建設会社 D</option>
+        </select>
+      </div>
+      <button id="btnTransfer">譲渡実行</button>
+    </div>
+    <div id="transferResult"></div>
+  </main>
+
+  <!-- 切り出し -->
+  <main id="viewSplit" class="view">
+    <div class="view-head">
+      <h2>✂️ 素材を切り出し</h2>
+      <button class="btn-back" data-view="viewHome">← ホームへ</button>
+    </div>
+    <p class="view-hint">親から一部を切り出して別の productId を付ける。親は ACTIVE のまま残り、同じ親から何度でも切り出せます。CONSUMED 済の素材は切り出せません。</p>
+    <div class="form-card">
+      <div class="form-row">
+        <label for="splitSelect">親を手持ちから選択 (ACTIVE のみ)</label>
+        <select id="splitSelect"><option value="">—</option></select>
+      </div>
+      <div class="form-row">
+        <label for="splitParentId">親 ID <span class="req">*</span></label>
+        <input type="text" id="splitParentId" placeholder="例: S-A-002">
+      </div>
+      <div class="form-row">
+        <label>切り出す子 (1 つ以上)</label>
+        <div id="splitChildren"></div>
+        <button id="btnAddSplitChild" class="btn-secondary">+ 子を追加</button>
+      </div>
+      <button id="btnSplit">切り出し実行</button>
+    </div>
+    <div id="splitResult"></div>
+  </main>
+
+  <!-- 接合 -->
+  <main id="viewMerge" class="view">
+    <div class="view-head">
+      <h2>🔗 素材を接合</h2>
+      <button class="btn-back" data-view="viewHome">← ホームへ</button>
+    </div>
+    <p class="view-hint">接合対象の素材は事前にすべて自組織へ譲渡しておくこと。全親は CONSUMED、子 1 つが新規生成されます。</p>
+    <div class="form-card">
+      <div class="form-row">
+        <label>親 (2 つ以上、手持ちから選択 or 手入力)</label>
+        <div id="mergeParents"></div>
+        <button id="btnAddMergeParent" class="btn-secondary">+ 親を追加</button>
+      </div>
+      <div class="form-row">
+        <label for="mergeChildId">子 ID (新規) <span class="req">*</span></label>
+        <input type="text" id="mergeChildId" placeholder="例: P-B-003">
+      </div>
+      <div class="form-row">
+        <label for="mergeMetadata">metadata (JSON)</label>
+        <input type="text" id="mergeMetadata" placeholder='例: {"type":"welded","purpose":"柱"}'>
+      </div>
+      <button id="btnMerge">接合実行</button>
+    </div>
+    <div id="mergeResult"></div>
   </main>
 
   <script src="app.js"></script>

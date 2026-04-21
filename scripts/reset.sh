@@ -25,12 +25,13 @@ usage() {
   cat <<EOF
 Usage: $(basename "$0") [options]
 
-Fabric ネットワーク完全リセット:
+Fabric ネットワーク完全リセット (5Org 対応):
   1. test-network の network.sh down
   2. chaincode コンテナ (dev-peer*) 削除
   3. chaincode image (dev-peer*) 削除
   4. Fabric docker volume / network の残留削除
-  5. 生成物 (organizations/ / channel-artifacts/ / addOrg3/fabric-ca/org3) 明示削除
+  5. 生成物 (organizations/ / channel-artifacts/) 明示削除
+     addOrg3/fabric-ca 残留 + addOrg4/addOrg5 ディレクトリ自体 (patches コピー)
 
 Options:
   --yes         確認プロンプトを省略
@@ -121,6 +122,45 @@ remove_leftover_networks() {
   fi
 }
 
+# root 所有の残骸を docker 経由で削除 (fabric-ca container が root で作る msp/*_sk 等)
+remove_root_owned_residue() {
+  log "==== root 所有残骸削除 (docker 経由) ===="
+  local targets=()
+  # addOrg4/5 の fabric-ca サブツリー
+  for n in 4 5; do
+    local p="${TEST_NET_DIR}/addOrg${n}"
+    if [[ -d "${p}" ]]; then targets+=("${p}"); fi
+  done
+  # organizations/ 配下 (fabric-ca/, peerOrganizations/, ordererOrganizations/)
+  if [[ -d "${TEST_NET_DIR}/organizations/peerOrganizations" ]]; then
+    targets+=("${TEST_NET_DIR}/organizations/peerOrganizations")
+  fi
+  if [[ -d "${TEST_NET_DIR}/organizations/ordererOrganizations" ]]; then
+    targets+=("${TEST_NET_DIR}/organizations/ordererOrganizations")
+  fi
+  # organizations/fabric-ca/ の org1,2,3 下の生成物 (msp, tls-cert 等) は root 所有
+  for org in org1 org2 org3 ordererOrg; do
+    local p="${TEST_NET_DIR}/organizations/fabric-ca/${org}/msp"
+    if [[ -d "${p}" ]]; then targets+=("${p}"); fi
+  done
+
+  if [[ ${#targets[@]} -gt 0 ]]; then
+    # コンテナ内 root として rm -rf
+    local vargs=()
+    for t in "${targets[@]}"; do
+      vargs+=(-v "${t}:/targets/$(basename "${t}")-$(echo "${t}" | sha256sum | cut -c1-8)")
+    done
+    docker run --rm "${vargs[@]}" alpine sh -c 'rm -rf /targets/*' >/dev/null 2>&1 || true
+    # 空になった各 target を rmdir 試行 (失敗許容)
+    for t in "${targets[@]}"; do
+      rmdir "${t}" 2>/dev/null || true
+    done
+    ok "root 所有残骸 削除試行: ${#targets[@]} 箇所"
+  else
+    ok "root 所有残骸なし"
+  fi
+}
+
 remove_leftover_artifacts() {
   # 注意: organizations/ を丸ごと消してはいけない。
   #       fabric-samples 付属スクリプト (ccp-generate.sh, cfssl/*, cryptogen/*,
@@ -131,13 +171,27 @@ remove_leftover_artifacts() {
     "${TEST_NET_DIR}/organizations/peerOrganizations"
     "${TEST_NET_DIR}/organizations/ordererOrganizations"
     "${TEST_NET_DIR}/channel-artifacts"
-    "${TEST_NET_DIR}/addOrg3/channel-artifacts"
-    "${TEST_NET_DIR}/addOrg3/fabric-ca/org3/msp"
-    "${TEST_NET_DIR}/addOrg3/fabric-ca/org3/tls-cert.pem"
-    "${TEST_NET_DIR}/addOrg3/fabric-ca/org3/ca-cert.pem"
-    "${TEST_NET_DIR}/addOrg3/fabric-ca/org3/IssuerPublicKey"
-    "${TEST_NET_DIR}/addOrg3/fabric-ca/org3/IssuerRevocationPublicKey"
-    "${TEST_NET_DIR}/addOrg3/fabric-ca/org3/fabric-ca-server.db"
+  )
+  # addOrg3/4/5 の channel-artifacts + fabric-ca 残留
+  local n
+  for n in 3 4 5; do
+    paths+=(
+      "${TEST_NET_DIR}/addOrg${n}/channel-artifacts"
+      "${TEST_NET_DIR}/addOrg${n}/fabric-ca/org${n}/msp"
+      "${TEST_NET_DIR}/addOrg${n}/fabric-ca/org${n}/tls-cert.pem"
+      "${TEST_NET_DIR}/addOrg${n}/fabric-ca/org${n}/ca-cert.pem"
+      "${TEST_NET_DIR}/addOrg${n}/fabric-ca/org${n}/IssuerPublicKey"
+      "${TEST_NET_DIR}/addOrg${n}/fabric-ca/org${n}/IssuerRevocationPublicKey"
+      "${TEST_NET_DIR}/addOrg${n}/fabric-ca/org${n}/fabric-ca-server.db"
+    )
+  done
+  # addOrg4/5 は patches からコピーされた「生成物」扱いで丸ごと削除可
+  # (addOrg3 は fabric-samples 付属なので削除不可)
+  paths+=(
+    "${TEST_NET_DIR}/addOrg4"
+    "${TEST_NET_DIR}/addOrg5"
+    "${TEST_NET_DIR}/scripts/org4-scripts"
+    "${TEST_NET_DIR}/scripts/org5-scripts"
   )
   local removed=0
   for p in "${paths[@]}"; do
@@ -170,6 +224,7 @@ main() {
   remove_chaincode_images
   remove_leftover_volumes
   remove_leftover_networks
+  remove_root_owned_residue
   remove_leftover_artifacts
   verify_clean
   echo

@@ -19,10 +19,14 @@ const TEST_NET_DIR = path.join(REPO_ROOT, 'fabric', 'fabric-samples', 'test-netw
 const ORGS_DIR = path.join(TEST_NET_DIR, 'organizations', 'peerOrganizations');
 
 const ORG_CONFIG = {
-  org1: { mspId: 'Org1MSP', peerEndpoint: 'localhost:7051', peerHostAlias: 'peer0.org1.example.com', label: 'メーカー A' },
-  org2: { mspId: 'Org2MSP', peerEndpoint: 'localhost:9051', peerHostAlias: 'peer0.org2.example.com', label: '卸 B' },
-  org3: { mspId: 'Org3MSP', peerEndpoint: 'localhost:11051', peerHostAlias: 'peer0.org3.example.com', label: '販売店 C' },
+  org1: { mspId: 'Org1MSP', peerEndpoint: 'localhost:7051',  peerHostAlias: 'peer0.org1.example.com', label: '高炉メーカー A' },
+  org2: { mspId: 'Org2MSP', peerEndpoint: 'localhost:9051',  peerHostAlias: 'peer0.org2.example.com', label: '電炉メーカー X' },
+  org3: { mspId: 'Org3MSP', peerEndpoint: 'localhost:11051', peerHostAlias: 'peer0.org3.example.com', label: '加工業者 B' },
+  org4: { mspId: 'Org4MSP', peerEndpoint: 'localhost:13051', peerHostAlias: 'peer0.org4.example.com', label: '加工業者 Y' },
+  org5: { mspId: 'Org5MSP', peerEndpoint: 'localhost:15051', peerHostAlias: 'peer0.org5.example.com', label: '建設会社 D' },
 };
+
+const MANUFACTURER_MSPS = ['Org1MSP', 'Org2MSP'];
 
 // ---------------------------------------------------------------------------
 // Fabric Gateway helpers
@@ -113,7 +117,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 function resolveOrg(req, res, next) {
   const org = req.query.org || req.headers['x-org'] || 'org1';
   if (!ORG_CONFIG[org]) {
-    return res.status(400).json({ error: `Invalid org: ${org}. Use org1, org2, or org3` });
+    const valid = Object.keys(ORG_CONFIG).join(', ');
+    return res.status(400).json({ error: `Invalid org: ${org}. Use one of: ${valid}` });
   }
   req.org = org;
   next();
@@ -129,18 +134,105 @@ app.get('/api/orgs', (_req, res) => {
   res.json(orgs);
 });
 
-// POST /api/products — CreateProduct
+// POST /api/products — CreateProduct (v2: metadata + millSheet support)
 app.post('/api/products', resolveOrg, async (req, res) => {
   try {
-    const { productId } = req.body;
+    const { productId, metadata, millSheetHash, millSheetURI } = req.body;
     if (!productId) return res.status(400).json({ error: 'productId is required' });
-    const contract = await getContract(req.org);
     const mspId = ORG_CONFIG[req.org].mspId;
-    const result = await contract.submitTransaction('CreateProduct', productId, mspId, mspId);
+    if (!MANUFACTURER_MSPS.includes(mspId)) {
+      return res.status(403).json({ error: `Only manufacturer orgs (Org1MSP/Org2MSP) can CreateProduct. Caller=${mspId}` });
+    }
+    const contract = await getContract(req.org);
+    const metadataJson = metadata === undefined ? '' : (typeof metadata === 'string' ? metadata : JSON.stringify(metadata));
+    const result = await contract.submitTransaction(
+      'CreateProduct',
+      productId, mspId, mspId,
+      metadataJson,
+      millSheetHash || '',
+      millSheetURI || ''
+    );
     res.json(JSON.parse(decodeResult(result)));
   } catch (err) {
     const msg = extractChaincodeError(err);
     res.status(400).json({ error: msg });
+  }
+});
+
+// POST /api/products/:id/split — SplitProduct (v2)
+// body: { children: [{ childId, toOwner, metadata?, millSheetHash?, millSheetURI? }, ...] }
+app.post('/api/products/:id/split', resolveOrg, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { children } = req.body;
+    if (!Array.isArray(children) || children.length < 2) {
+      return res.status(400).json({ error: 'children must be an array with at least 2 elements' });
+    }
+    const childrenForCc = children.map((c) => ({
+      childId: c.childId,
+      toOwner: c.toOwner,
+      metadataJson: c.metadata === undefined ? '' : (typeof c.metadata === 'string' ? c.metadata : JSON.stringify(c.metadata)),
+      millSheetHash: c.millSheetHash || '',
+      millSheetURI: c.millSheetURI || '',
+    }));
+    const contract = await getContract(req.org);
+    const result = await contract.submitTransaction('SplitProduct', id, JSON.stringify(childrenForCc));
+    res.json(JSON.parse(decodeResult(result)));
+  } catch (err) {
+    const msg = extractChaincodeError(err);
+    res.status(400).json({ error: msg });
+  }
+});
+
+// POST /api/products/merge — MergeProducts (v2)
+// body: { parentIds: [...], child: { childId, metadata?, millSheetHash?, millSheetURI? } }
+app.post('/api/products/merge', resolveOrg, async (req, res) => {
+  try {
+    const { parentIds, child } = req.body;
+    if (!Array.isArray(parentIds) || parentIds.length < 2) {
+      return res.status(400).json({ error: 'parentIds must be an array with at least 2 elements' });
+    }
+    if (!child || !child.childId) return res.status(400).json({ error: 'child.childId is required' });
+    const childForCc = {
+      childId: child.childId,
+      metadataJson: child.metadata === undefined ? '' : (typeof child.metadata === 'string' ? child.metadata : JSON.stringify(child.metadata)),
+      millSheetHash: child.millSheetHash || '',
+      millSheetURI: child.millSheetURI || '',
+    };
+    const contract = await getContract(req.org);
+    const result = await contract.submitTransaction('MergeProducts', JSON.stringify(parentIds), JSON.stringify(childForCc));
+    res.json(JSON.parse(decodeResult(result)));
+  } catch (err) {
+    const msg = extractChaincodeError(err);
+    res.status(400).json({ error: msg });
+  }
+});
+
+// GET /api/products/:id/lineage — GetLineage (v2)
+app.get('/api/products/:id/lineage', resolveOrg, async (req, res) => {
+  try {
+    const contract = await getContract(req.org);
+    const result = await contract.evaluateTransaction('GetLineage', req.params.id);
+    res.json(JSON.parse(decodeResult(result)));
+  } catch (err) {
+    const msg = extractChaincodeError(err);
+    res.status(404).json({ error: msg });
+  }
+});
+
+// GET /api/products?owner=Org3MSP — ListProductsByOwner
+// org クエリは「どの組織として query するか」(evaluateTransaction 用)
+// owner クエリは「どの MSP が保有する product を列挙するか」
+// owner 未指定時は現 org の MSP をデフォルトにする。
+app.get('/api/products', resolveOrg, async (req, res) => {
+  try {
+    const ownerMspId = req.query.owner || ORG_CONFIG[req.org].mspId;
+    const contract = await getContract(req.org);
+    const result = await contract.evaluateTransaction('ListProductsByOwner', ownerMspId);
+    res.json(JSON.parse(decodeResult(result)));
+  } catch (err) {
+    const msg = extractChaincodeError(err);
+    res.status(500).json({ error: msg });
   }
 });
 

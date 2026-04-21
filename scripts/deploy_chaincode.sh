@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# deploy_chaincode.sh — Phase 4 T4-1
-# product-trace chaincode を 3Org にデプロイ
-# - package → install×3 → approve×3 → commit
-# - endorsement policy: OR('Org1MSP.peer','Org2MSP.peer','Org3MSP.peer')  (3Org OR 必須)
-# - version / sequence 引数化（再デプロイ衝突回避）
+# deploy_chaincode.sh — Phase 8
+# product-trace chaincode を 5Org にデプロイ
+# - package → install×5 → approve×5 → commit
+# - endorsement policy: OR('Org1MSP.peer',...,'Org5MSP.peer') (5Org OR)
+# - version / sequence 引数化 (再デプロイ衝突回避)
 # - 冪等性: 既に install/approve/commit 済なら skip
 
 set -euo pipefail
@@ -14,7 +14,8 @@ CC_NAME="${CC_NAME:-product-trace}"
 CC_VERSION="${CC_VERSION:-1.0}"
 CC_SEQUENCE="${CC_SEQUENCE:-1}"
 CC_LANG="node"
-SIG_POLICY="OR('Org1MSP.peer','Org2MSP.peer','Org3MSP.peer')"
+SIG_POLICY="OR('Org1MSP.peer','Org2MSP.peer','Org3MSP.peer','Org4MSP.peer','Org5MSP.peer')"
+ORGS=(1 2 3 4 5)
 
 # ===== パス =====
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -49,7 +50,7 @@ usage() {
   cat <<EOF
 Usage: $(basename "$0") [options]
 
-product-trace chaincode を 3Org にデプロイする。
+product-trace chaincode を 5Org にデプロイする。
 
 Options:
   -c, --channel <name>     channel 名 (default: ${CHANNEL_NAME})
@@ -78,7 +79,19 @@ PKG_FILE="${PKG_DIR}/${CC_NAME}_${CC_VERSION}.tar.gz"
 CC_LABEL="${CC_NAME}_${CC_VERSION}"
 
 # ===== Org 切替 =====
-# set_org_env <1|2|3>  — CORE_PEER_* を対象 Org の Admin にセット
+# org_port <n> — 各 Org の peer port を返す
+org_port() {
+  case "$1" in
+    1) echo 7051  ;;
+    2) echo 9051  ;;
+    3) echo 11051 ;;
+    4) echo 13051 ;;
+    5) echo 15051 ;;
+    *) echo ""; return 1 ;;
+  esac
+}
+
+# set_org_env <1-5> — CORE_PEER_* を対象 Org の Admin にセット
 set_org_env() {
   local n="$1"
   local org_dir="${TEST_NET_DIR}/organizations/peerOrganizations/org${n}.example.com"
@@ -86,25 +99,15 @@ set_org_env() {
   export CORE_PEER_LOCALMSPID="Org${n}MSP"
   export CORE_PEER_TLS_ROOTCERT_FILE="${org_dir}/peers/peer0.org${n}.example.com/tls/ca.crt"
   export CORE_PEER_MSPCONFIGPATH="${org_dir}/users/Admin@org${n}.example.com/msp"
-  case "$n" in
-    1) export CORE_PEER_ADDRESS=localhost:7051  ;;
-    2) export CORE_PEER_ADDRESS=localhost:9051  ;;
-    3) export CORE_PEER_ADDRESS=localhost:11051 ;;
-    *) err "invalid org: $n"; exit 2 ;;
-  esac
+  export CORE_PEER_ADDRESS="localhost:$(org_port "$n")"
 }
 
 peer_tls_args() {
-  # stdout に peer CLI 用 TLS 引数を吐く
   local n="$1"
   local tls="${TEST_NET_DIR}/organizations/peerOrganizations/org${n}.example.com/peers/peer0.org${n}.example.com/tls/ca.crt"
-  local host port
-  case "$n" in
-    1) host="localhost"; port=7051  ;;
-    2) host="localhost"; port=9051  ;;
-    3) host="localhost"; port=11051 ;;
-  esac
-  printf -- '--peerAddresses %s:%s --tlsRootCertFiles %s' "$host" "$port" "$tls"
+  local port
+  port="$(org_port "$n")"
+  printf -- '--peerAddresses localhost:%s --tlsRootCertFiles %s' "$port" "$tls"
 }
 
 preflight() {
@@ -149,8 +152,8 @@ do_package() {
 # ===== 2) install (3Org) + package ID 取得 =====
 PACKAGE_ID=""
 do_install_all() {
-  log "==== install on Org1/Org2/Org3 ===="
-  for n in 1 2 3; do
+  log "==== install on Org1/Org2/Org3/Org4/Org5 ===="
+  for n in "${ORGS[@]}"; do
     set_org_env "$n"
     if "${PEER_BIN}" lifecycle chaincode queryinstalled --output json 2>/dev/null \
          | jq -e --arg l "${CC_LABEL}" \
@@ -180,8 +183,8 @@ do_install_all() {
 # package_id まで見ないと、staging 差分で hash が変わったのに「approve 済」扱いされ、
 # commit / invoke 時に古い approval と新 install の不整合で壊れる
 do_approve_all() {
-  log "==== approveformyorg on Org1/Org2/Org3 ===="
-  for n in 1 2 3; do
+  log "==== approveformyorg on Org1〜Org5 ===="
+  for n in "${ORGS[@]}"; do
     set_org_env "$n"
     # queryapproved JSON 構造 (Fabric 2.5.15):
     #   .version / .sequence / .source.Type.LocalPackage.package_id
@@ -234,16 +237,16 @@ do_commit() {
     --signature-policy "${SIG_POLICY}" \
     --output json)"
   echo "${readiness}"
-  # PoC 規約: OR policy だが lifecycle は 3Org 全 approve を前提条件として強制する
+  # PoC 規約: OR policy だが lifecycle は 5Org 全 approve を前提条件として強制する
   if ! echo "${readiness}" | jq -e '[.approvals | to_entries[] | .value] | all' >/dev/null; then
-    err "3Org 全 approve が揃っていません (checkcommitreadiness):"
+    err "5Org 全 approve が揃っていません (checkcommitreadiness):"
     echo "${readiness}" | jq '.approvals' >&2
     exit 1
   fi
-  ok "3Org 全 approve 確認"
+  ok "5Org 全 approve 確認"
 
   log "==== commit ===="
-  # 3Org すべての peer を target にして OR policy 下で lifecycle endorsement を満たす
+  # 5Org すべての peer を target にして OR policy 下で lifecycle endorsement を満たす
   # shellcheck disable=SC2046
   "${PEER_BIN}" lifecycle chaincode commit \
     -o "${ORDERER_ADDR}" --ordererTLSHostnameOverride "${ORDERER_HOST}" \
@@ -255,7 +258,9 @@ do_commit() {
     --signature-policy "${SIG_POLICY}" \
     $(peer_tls_args 1) \
     $(peer_tls_args 2) \
-    $(peer_tls_args 3)
+    $(peer_tls_args 3) \
+    $(peer_tls_args 4) \
+    $(peer_tls_args 5)
   ok "commit 完了"
 }
 
@@ -277,7 +282,7 @@ main() {
   do_commit
   do_verify
   echo
-  ok "Phase 4 deploy 完了"
-  echo "${C_DIM}次: ./scripts/invoke_as.sh org1 CreateProduct X001 Org1MSP Org1MSP${C_OFF}"
+  ok "Phase 8 deploy 完了 (5Org)"
+  echo "${C_DIM}次: ./scripts/demo_normal.sh で複合シナリオ (Split+Merge) 実行${C_OFF}"
 }
 main "$@"

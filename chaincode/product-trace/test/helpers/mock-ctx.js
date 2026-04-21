@@ -22,21 +22,44 @@ function makeTimestampNumeric(isoString) {
   };
 }
 
-function createMockContext({ mspId = 'Org1MSP', identityId = 'x509::CN=Admin@org1', txId = 'tx-1', txTimestampISO = '2026-04-15T10:00:00.000Z' } = {}) {
-  const store = new Map();
+function createMockContext({ mspId = 'Org1MSP', identityId = 'x509::CN=Admin@org1', txId = 'tx-1', txTimestampISO = '2026-04-15T10:00:00.000Z', store } = {}) {
+  // store は任意。未指定なら新規 Map。複数 ctx 間で state を共有したい場合は同じ Map を渡す。
+  const sharedStore = store || new Map();
 
   const stub = {
     getState: sinon.stub().callsFake(async (key) => {
-      if (!store.has(key)) return Buffer.from('');
-      return store.get(key);
+      if (!sharedStore.has(key)) return Buffer.from('');
+      return sharedStore.get(key);
     }),
     putState: sinon.stub().callsFake(async (key, value) => {
-      store.set(key, value);
+      sharedStore.set(key, value);
+    }),
+    // getStateByRange: startKey='' endKey='' のとき全件を返す想定 (ListProductsByOwner 用)。
+    // 実 Fabric と同様、key 昇順で enumerate。
+    getStateByRange: sinon.stub().callsFake(async (_startKey, _endKey) => {
+      const entries = [...sharedStore.entries()].sort((a, b) => {
+        if (a[0] < b[0]) return -1;
+        if (a[0] > b[0]) return 1;
+        return 0;
+      });
+      let i = 0;
+      return {
+        next: async () => {
+          if (i >= entries.length) return { value: null, done: true };
+          const [k, v] = entries[i];
+          i += 1;
+          return {
+            value: { key: k, value: v },
+            done: i >= entries.length,
+          };
+        },
+        close: async () => {},
+      };
     }),
     getTxID: sinon.stub().returns(txId),
     getTxTimestamp: sinon.stub().returns(makeTimestampNumeric(txTimestampISO)),
     getHistoryForKey: sinon.stub(),
-    _store: store,
+    _store: sharedStore,
   };
 
   const clientIdentity = {
