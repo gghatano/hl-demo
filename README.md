@@ -62,12 +62,13 @@ sequenceDiagram
 
 | ツール | バージョン |
 |---|---|
-| Linux (WSL2 可) | Ubuntu 22.04 で検証 |
+| OS | Ubuntu 22.04 (WSL2 可) / macOS (Apple Silicon, Colima 経由) |
 | Docker | 29+ (`docker compose v2`) |
 | Node.js | 18 LTS |
 | jq | 1.6+ |
 
-クリーン Ubuntu からの導入手順・WSL2 設定は **[docs/prerequisites.md](docs/prerequisites.md)** を参照。
+クリーン Ubuntu / macOS (Colima) 導入手順は **[docs/prerequisites.md](docs/prerequisites.md)** を参照。
+> macOS では **Docker Desktop 非推奨**（socket proxy で chaincode install が壊れる。詳細 [docs/fabric-pitfalls.md](docs/fabric-pitfalls.md)）。Colima を使うこと。
 
 ## テスト
 
