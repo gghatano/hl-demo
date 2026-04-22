@@ -49,15 +49,20 @@ Endorsement policy: `OR('Org1MSP.peer',...,'Org5MSP.peer')`
 ./scripts/network_up.sh
 ./scripts/deploy_chaincode.sh
 
-# 4. 複合シナリオ実行 (分割 → 接合 → 納品 → 系譜検証)
+# 4. 3 部構成デモ実行
+#    Part 1: 基本シナリオ (分割 → 接合 → 納品)
+#    Part 2: Merge-of-Merge (多段組立)
+#    Part 3: Diamond DAG (祖先再マージ)
 ./scripts/demo_normal.sh
 ```
 
 > 一括: `./scripts/demo_normal.sh --fresh` で reset → 起動 → デプロイ → デモまで連動。
+> 詳細台本: [docs/demo-scenarios.md](docs/demo-scenarios.md)
 
 **ブラウザ版デモ**: `./scripts/web_demo.sh` → `http://localhost:3000`
 - 5 組織切替 / 新規素材登録 (ミルシート PDF ドロップで SHA-256 自動計算)
 - 分割・接合フォーム / Mermaid による系譜 DAG 可視化
+- サンプル素材の冪等投入: `./scripts/demo_seed.sh` (単純 DAG + Merge-of-Merge + Diamond DAG を含む)
 
 クリーンアップ: `./scripts/reset.sh --yes`
 
