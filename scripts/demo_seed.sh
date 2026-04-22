@@ -37,6 +37,33 @@
 #     S-A-005-p1   さらに切り出し 1t         CONSUMED (P-B-040 素材, 孫経由で S-A-005 に到達)
 #     P-B-040      祖先再マージ実証 (S-A-005 + S-A-005-p1) ACTIVE   (加工B 在庫)
 #
+#   --- 業務リアリティ向上: メーカー在庫 + 仕掛中案件 ----------------
+#   高炉A 未出荷在庫 (手持ち 5 ロット: S-A-002 含む):
+#     S-A-006  SM490 15t   大型梁材向け     ACTIVE   高炉A 保有
+#     S-A-007  SM520 12t   橋梁用高強度     ACTIVE   高炉A 保有
+#     S-A-008  SS400 10t   柱材向け標準品   ACTIVE   高炉A 保有
+#     S-A-009  SS400 5t    補修用小ロット   ACTIVE   高炉A 保有
+#
+#   電炉X 未出荷在庫 (手持ち 5 ロット):
+#     S-X-005  H形鋼 SM490 5t  汎用梁材     ACTIVE   電炉X 保有
+#     S-X-006  H形鋼 SM520 8t  大型梁材     ACTIVE   電炉X 保有
+#     S-X-007  アングル SS400 2t           ACTIVE   電炉X 保有
+#     S-X-008  チャンネル SM490 3t          ACTIVE   電炉X 保有
+#     S-X-009  鉄筋 SD345 4t                ACTIVE   電炉X 保有
+#
+#   加工B 仕掛中 (受入→分割、接合待ち):
+#     S-A-010    A→B 譲渡済 6t SS400       ACTIVE   (親、2 分割済みで ACTIVE 継続)
+#     S-A-010-a  切り出し 3t 接合待ち       ACTIVE   加工B 保有
+#     S-A-010-b  切り出し 3t 接合待ち       ACTIVE   加工B 保有
+#
+#   加工Y 仕掛中 (受入→分割、接合待ち):
+#     S-X-010    X→Y 譲渡済 4t アングル    ACTIVE   (親、2 分割済み)
+#     S-X-010-a  切り出し 2t 接合待ち       ACTIVE   加工Y 保有
+#     S-X-010-b  切り出し 2t 接合待ち       ACTIVE   加工Y 保有
+#
+#   建設D 別工区納品 (素材直送):
+#     S-X-011    鉄筋 SD390 3t              ACTIVE   (X→Y→D の通し納品)
+#
 # v1.3 以降の「切り出し」モデル: 親は CONSUMED にならず ACTIVE のまま残る。
 # 親の children[] に切り出した子 ID が cumulative に記録される。
 #
@@ -231,17 +258,78 @@ seed_split "S-A-005-p" org3 '[{"childId":"S-A-005-p1","toOwner":"Org3MSP","metad
 #     さらに S-A-005-p1 → S-A-005-p → S-A-005 の経路でも祖先 S-A-005 に到達できる。
 seed_merge '["S-A-005","S-A-005-p1"]' "P-B-040" org3 '{"type":"welded","purpose":"祖先再マージ実証","note":"S-A-005 由来を 2 経路で保持"}'
 
+# ====================================
+# 業務リアリティ向上: メーカー在庫 + 加工業者の仕掛中案件
+# ====================================
+#
+# 各社の手持ち素材を現実に近づけるための追加投入。
+# - 高炉A / 電炉X: 未出荷の在庫ロット (受注前 / 受注分 / 補修用の区別)
+# - 加工B / 加工Y: 仕掛中の加工ジョブ (受入→分割後でまだ接合/納品前)
+
+# --- 高炉A 未出荷在庫 (4 ロット) ------------------------------------
+# 22. S-A-006: 大型梁材向け SM490 (受注残り待ち)
+seed_create "S-A-006" org1 Org1MSP '{"category":"plate","grade":"SM490","weightKg":15000,"heatNo":"HT-A-006","note":"大型梁材向け"}'
+
+# 23. S-A-007: 橋梁用高強度 SM520 (プレミアム在庫)
+seed_create "S-A-007" org1 Org1MSP '{"category":"plate","grade":"SM520","weightKg":12000,"heatNo":"HT-A-007","note":"橋梁用高強度"}'
+
+# 24. S-A-008: 汎用 SS400 10t (柱材向け標準品)
+seed_create "S-A-008" org1 Org1MSP '{"category":"plate","grade":"SS400","weightKg":10000,"heatNo":"HT-A-008","note":"柱材向け標準品"}'
+
+# 25. S-A-009: 小ロット補修用 SS400 5t
+seed_create "S-A-009" org1 Org1MSP '{"category":"plate","grade":"SS400","weightKg":5000,"heatNo":"HT-A-009","note":"補修用小ロット"}'
+
+# --- 電炉X 未出荷在庫 (5 ロット) ------------------------------------
+# 26. S-X-005: H 形鋼 SM490 5t (汎用)
+seed_create "S-X-005" org2 Org2MSP '{"category":"h-beam","grade":"SM490","weightKg":5000,"heatNo":"HT-X-005","note":"H形鋼 汎用梁材"}'
+
+# 27. S-X-006: H 形鋼 SM520 8t (大型)
+seed_create "S-X-006" org2 Org2MSP '{"category":"h-beam","grade":"SM520","weightKg":8000,"heatNo":"HT-X-006","note":"大型梁材"}'
+
+# 28. S-X-007: 等辺アングル SS400 2t
+seed_create "S-X-007" org2 Org2MSP '{"category":"angle","grade":"SS400","weightKg":2000,"heatNo":"HT-X-007","note":"ブレース用アングル"}'
+
+# 29. S-X-008: チャンネル SM490 3t
+seed_create "S-X-008" org2 Org2MSP '{"category":"channel","grade":"SM490","weightKg":3000,"heatNo":"HT-X-008","note":"チャンネル材"}'
+
+# 30. S-X-009: 異形棒鋼 SD345 4t (鉄筋)
+seed_create "S-X-009" org2 Org2MSP '{"category":"rebar","grade":"SD345","weightKg":4000,"heatNo":"HT-X-009","note":"鉄筋 D25"}'
+
+# --- 加工B 仕掛中 (受入→分割中、接合前) ----------------------------
+# 31. 高炉A が S-A-010 を製造 → 加工B へ譲渡
+seed_create "S-A-010" org1 Org1MSP '{"category":"plate","grade":"SS400","weightKg":6000,"heatNo":"HT-A-010","note":"B受注分"}'
+seed_transfer "S-A-010" org1 Org1MSP Org3MSP
+
+# 32. 加工B が S-A-010 を 2 分割 (接合はまだ未着手 = 仕掛中)
+seed_split "S-A-010" org3 '[{"childId":"S-A-010-a","toOwner":"Org3MSP","metadataJson":"{\"weightKg\":3000,\"grade\":\"SS400\",\"note\":\"接合待ち\"}"},{"childId":"S-A-010-b","toOwner":"Org3MSP","metadataJson":"{\"weightKg\":3000,\"grade\":\"SS400\",\"note\":\"接合待ち\"}"}]'
+
+# --- 加工Y 仕掛中 (受入→分割中、接合前) ----------------------------
+# 33. 電炉X が S-X-010 を製造 → 加工Y へ譲渡
+seed_create "S-X-010" org2 Org2MSP '{"category":"angle","grade":"SS400","weightKg":4000,"heatNo":"HT-X-010","note":"Y受注分"}'
+seed_transfer "S-X-010" org2 Org2MSP Org4MSP
+
+# 34. 加工Y が S-X-010 を 2 分割 (接合待ち)
+seed_split "S-X-010" org4 '[{"childId":"S-X-010-a","toOwner":"Org4MSP","metadataJson":"{\"weightKg\":2000,\"grade\":\"SS400\",\"note\":\"接合待ち\"}"},{"childId":"S-X-010-b","toOwner":"Org4MSP","metadataJson":"{\"weightKg\":2000,\"grade\":\"SS400\",\"note\":\"接合待ち\"}"}]'
+
+# --- 建設D 追加納品 (過去の別工区) ----------------------------------
+# 35. 電炉X が S-X-011 (鉄筋ロット) を製造 → 加工Y → 建設D へ通し納品
+#     D の手持ちに「素材をそのまま納品された鉄筋」パターンも追加。
+seed_create "S-X-011" org2 Org2MSP '{"category":"rebar","grade":"SD390","weightKg":3000,"heatNo":"HT-X-011","note":"D 別工区向け鉄筋"}'
+seed_transfer "S-X-011" org2 Org2MSP Org4MSP
+seed_transfer "S-X-011" org4 Org4MSP Org5MSP
+
 echo
 ok "サンプルデータ投入完了"
 echo
-echo "${C_DIM}確認コマンド (基本シナリオ):${C_OFF}"
-echo "  ./scripts/invoke_as.sh org3 query ListProductsByOwner Org3MSP   # 加工B 手持ち"
+echo "${C_DIM}確認コマンド (各社の手持ち):${C_OFF}"
+echo "  ./scripts/invoke_as.sh org1 query ListProductsByOwner Org1MSP   # 高炉A 未出荷在庫 (S-A-002, 006-009)"
+echo "  ./scripts/invoke_as.sh org2 query ListProductsByOwner Org2MSP   # 電炉X 未出荷在庫 (S-X-005-009)"
+echo "  ./scripts/invoke_as.sh org3 query ListProductsByOwner Org3MSP   # 加工B 手持ち (仕掛中 + 完成品)"
 echo "  ./scripts/invoke_as.sh org4 query ListProductsByOwner Org4MSP   # 加工Y 手持ち"
-echo "  ./scripts/invoke_as.sh org5 query ListProductsByOwner Org5MSP   # 建設D 手持ち"
-echo "  ./scripts/invoke_as.sh org5 query GetLineage P-B-001            # 単純 DAG (A と X の 2 系統)"
+echo "  ./scripts/invoke_as.sh org5 query ListProductsByOwner Org5MSP   # 建設D 納品済み"
 echo
 echo "${C_DIM}確認コマンド (複雑シナリオ):${C_OFF}"
+echo "  ./scripts/invoke_as.sh org5 query GetLineage P-B-001            # 単純 DAG (A と X の 2 系統)"
 echo "  ./scripts/invoke_as.sh org5 query GetLineage P-B-020            # Merge-of-Merge: 4 階層 DAG"
 echo "  ./scripts/invoke_as.sh org3 query GetLineage P-B-040            # Diamond DAG: S-A-005 へ 2 経路"
-echo "  ./scripts/invoke_as.sh org3 query GetHistory  S-A-005           # 祖先再マージで CONSUMED に至る履歴"
-echo "  ./scripts/invoke_as.sh org4 query GetHistory  S-X-004           # 多段切り出しで children[] が育つ履歴"
+echo "  ./scripts/invoke_as.sh org3 query GetHistory  S-A-010           # 仕掛中案件の履歴 (CREATE/TRANSFER/SPLIT)"

@@ -238,18 +238,38 @@ S5-p-1 ─MERGE→ PD     (直接)
 
 ## Web UI 向けサンプル投入（demo_seed.sh）
 
-`./scripts/demo_seed.sh` を走らせると、上記 Part 1〜3 と同じパターンの素材を異なる productId (S-A-001 系 / P-B-020 / P-B-040 など) で冪等投入する。
+`./scripts/demo_seed.sh` を走らせると、上記 Part 1〜3 と同じパターンの素材を異なる productId (S-A-001 系 / P-B-020 / P-B-040 など) で冪等投入する。加えて **各社の手持ちが業務的にリアルな portfolio** になるよう、以下のカテゴリも投入される。
 
-投入後の手持ち素材一覧:
+### 投入される素材のカテゴリ
 
-| 組織 | 確認コマンド | 内容 |
+| カテゴリ | 意図 | 例 |
 |---|---|---|
-| 加工 B | `./scripts/invoke_as.sh org3 query ListProductsByOwner Org3MSP` | S-A-001 系の残り / P-B-002 / P-B-040 等 |
-| 加工 Y | `./scripts/invoke_as.sh org4 query ListProductsByOwner Org4MSP` | S-X-002, S-X-004 系の残り |
-| 建設 D | `./scripts/invoke_as.sh org5 query ListProductsByOwner Org5MSP` | S-A-001-b / P-B-001 / P-B-020 |
+| 完成済みの加工フロー | Part 1-3 と同形状の DAG を残すため | P-B-001, P-B-002, P-B-020, P-B-040 |
+| **メーカー未出荷在庫** | A / X の portfolio が空にならないよう、複数ロットを製造直後の状態で保持 | S-A-006〜S-A-009, S-X-005〜S-X-009 |
+| **加工業者の仕掛中案件** | 受入済み・分割済みだが接合前 ── 現実の WIP (work in progress) を再現 | S-A-010 + 子 / S-X-010 + 子 |
+| **D への素材直送納品** | 別工区向けの通し納品 (X→Y→D) | S-X-011 |
 
-系譜検証:
+### 投入後の手持ち素材一覧
+
+| 組織 | 確認コマンド | 内容（主なもの） |
+|---|---|---|
+| 高炉 A | `./scripts/invoke_as.sh org1 query ListProductsByOwner Org1MSP` | S-A-002, S-A-006〜S-A-009（未出荷在庫 5 ロット） |
+| 電炉 X | `./scripts/invoke_as.sh org2 query ListProductsByOwner Org2MSP` | S-X-005〜S-X-009（未出荷在庫 5 ロット: H形鋼 / アングル / チャンネル / 鉄筋） |
+| 加工 B | `./scripts/invoke_as.sh org3 query ListProductsByOwner Org3MSP` | S-A-001 系残り, P-B-002, P-B-040, S-A-010 系 (仕掛中) など |
+| 加工 Y | `./scripts/invoke_as.sh org4 query ListProductsByOwner Org4MSP` | S-X-002, S-X-004 系残り, S-X-010 系 (仕掛中) |
+| 建設 D | `./scripts/invoke_as.sh org5 query ListProductsByOwner Org5MSP` | S-A-001-b, P-B-001, P-B-020, S-X-011（素材直送） |
+
+### 取引・処理履歴の可視化
+
+仕掛中案件 `S-A-010` は CREATE → TRANSFER (A→B) → SPLIT の 3 イベントを含む典型パターン:
 ```bash
+./scripts/invoke_as.sh org3 query GetHistory S-A-010
+```
+
+### 系譜検証
+
+```bash
+./scripts/invoke_as.sh org5 query GetLineage P-B-001    # 単純 DAG
 ./scripts/invoke_as.sh org5 query GetLineage P-B-020    # Merge-of-Merge DAG
 ./scripts/invoke_as.sh org3 query GetLineage P-B-040    # Diamond DAG
 ```
