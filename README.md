@@ -64,6 +64,12 @@ Endorsement policy: `OR('Org1MSP.peer',...,'Org5MSP.peer')`
 - 分割・接合フォーム / Mermaid による系譜 DAG 可視化
 - サンプル素材の冪等投入: `./scripts/demo_seed.sh` (単純 DAG + Merge-of-Merge + Diamond DAG を含む)
 
+**Web デモを一発で立ち上げる**:
+```bash
+./scripts/web_demo.sh --fresh   # reset → network_up → deploy → seed → web
+./scripts/web_demo.sh --seed    # 既存 NW にサンプルだけ追加投入 → web
+```
+
 クリーンアップ: `./scripts/reset.sh --yes`
 
 ## 前提環境
